@@ -15,8 +15,8 @@ class Bullet {
     // Ammo properties
     this.ammoType = null;
     this.damage = 1; // Base damage + ammo bonus
-    this.color = 'yellow'; // Default color
-    this.trailColor = 'orange';
+    this.color = '#00ffff'; // Default cyan laser
+    this.trailColor = '#0088ff';
     this.pierceCount = 0; // How many zombies it can pierce
     this.piercedZombies = []; // Track pierced zombies
     this.explosiveRadius = 0; // AOE radius
@@ -73,8 +73,8 @@ class Bullet {
       // Default ammo - but still check for upgrade crit chance
       this.ammoType = null;
       this.damage = 1;
-      this.color = 'yellow';
-      this.trailColor = 'orange';
+      this.color = '#00ffff';
+      this.trailColor = '#0088ff';
       this.size = CONFIG.BULLET.SIZE;
       this.pierceCount = 0;
       this.explosiveRadius = 0;
@@ -105,29 +105,48 @@ class Bullet {
   }
 
   draw(ctx) {
-    // Draw bullet with ammo color
+    // Draw laser energy bolt with glow
+    const angle = Math.atan2(this.dy, this.dx);
+
+    // Outer glow
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = this.trailColor;
+    ctx.fillRect(-this.size * 2, -this.size * 1.5, this.size * 4, this.size * 3);
+    ctx.globalAlpha = 1.0;
+
+    // Core laser beam
     ctx.fillStyle = this.color;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(-this.size, -this.size * 0.8, this.size * 2, this.size * 1.6);
+
+    // Bright center
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-this.size * 0.5, -this.size * 0.4, this.size, this.size * 0.8);
+    ctx.restore();
 
     // Draw critical hit indicator
     if (this.critical) {
-      ctx.strokeStyle = '#FF0000';
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(angle);
+      ctx.strokeStyle = '#FF00FF';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size + 2, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.strokeRect(-this.size * 1.5, -this.size * 1.2, this.size * 3, this.size * 2.4);
+      ctx.restore();
     }
 
-    // Trail effect for special ammo (simple glow)
+    // Enhanced trail for special ammo
     if (this.ammoType && this.ammoType.particleType) {
-      ctx.globalAlpha = 0.3;
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(angle);
+      ctx.globalAlpha = 0.2;
       ctx.fillStyle = this.trailColor;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(-this.size * 3, -this.size * 2, this.size * 6, this.size * 4);
       ctx.globalAlpha = 1.0;
+      ctx.restore();
     }
   }
 

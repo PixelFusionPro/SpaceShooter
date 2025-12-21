@@ -47,6 +47,18 @@ class ZombieGame {
     // Get context after scaling setup (context is scaled by DPR now)
     this.ctx = canvas.getContext('2d');
 
+    // Space background stars
+    this.stars = [];
+    for (let i = 0; i < 100; i++) {
+      this.stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 2,
+        speed: Math.random() * 0.5 + 0.1,
+        opacity: Math.random() * 0.5 + 0.5
+      });
+    }
+
     // Core entities
     this.player = null;
     this.controls = new Controls(canvas, (isPaused) => this.handlePauseToggle(isPaused));
@@ -719,6 +731,9 @@ class ZombieGame {
   update() {
     if (this.controls.isPaused || this.gameOver) return;
 
+    // Update animated stars
+    this.updateStars();
+
     // Phase 3: Skip controls and combat during death animation
     const isDying = this.player.dying;
 
@@ -1047,8 +1062,30 @@ class ZombieGame {
     }
   }
 
+  updateStars() {
+    for (const star of this.stars) {
+      star.y += star.speed;
+      if (star.y > this.canvas.height) {
+        star.y = 0;
+        star.x = Math.random() * this.canvas.width;
+      }
+    }
+  }
+
+  drawStars() {
+    this.ctx.save();
+    for (const star of this.stars) {
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+      this.ctx.fillRect(star.x, star.y, star.size, star.size);
+    }
+    this.ctx.restore();
+  }
+
   draw() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Draw animated stars background
+    this.drawStars();
 
     // Draw all particle systems (background layer)
     this.particleManager.draw(this.ctx);
