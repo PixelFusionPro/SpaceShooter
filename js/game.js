@@ -1,0 +1,1318 @@
+// Main Game Class - Industry-Leading Architecture
+
+// Canvas scaling utility with device pixel ratio
+function setupCanvasScaling(canvas) {
+  const container = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  let ctx = null;
+  
+  function resizeCanvas() {
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    // Set canvas display size (CSS pixels)
+    canvas.style.width = containerWidth + 'px';
+    canvas.style.height = containerHeight + 'px';
+    
+    // Set canvas internal resolution (actual pixels)
+    canvas.width = containerWidth * dpr;
+    canvas.height = containerHeight * dpr;
+    
+    // Get or reuse context and reset transform, then scale for device pixel ratio
+    ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+    ctx.scale(dpr, dpr);
+    
+    // Update CONFIG with actual display dimensions (CSS pixels)
+    CONFIG.CANVAS_WIDTH = containerWidth;
+    CONFIG.CANVAS_HEIGHT = containerHeight;
+  }
+  
+  // Initial resize
+  resizeCanvas();
+  
+  // Resize on window resize
+  window.addEventListener('resize', resizeCanvas);
+  
+  // Return resize function for manual calls
+  return resizeCanvas;
+}
+
+class ZombieGame {
+  constructor(canvas) {
+    this.canvas = canvas;
+    
+    // Setup responsive canvas scaling with device pixel ratio
+    this.resizeCanvas = setupCanvasScaling(canvas);
+    // Get context after scaling setup (context is scaled by DPR now)
+    this.ctx = canvas.getContext('2d');
+
+    // Core entities
+    this.player = null;
+    this.controls = new Controls(canvas, (isPaused) => this.handlePauseToggle(isPaused));
+
+    // Managers (Industry-leading separation of concerns)
+    this.particleManager = new ParticleManager();
+    this.scoreManager = new ScoreManager();
+    this.statisticsManager = new StatisticsManager();
+    this.inventoryManager = new InventoryManager();
+    this.shopManager = new ShopManager(this.inventoryManager, this.scoreManager);
+    this.powerupManager = new PowerupManager(canvas, this.particleManager);
+    this.achievementManager = new AchievementManager();
+    this.waveManager = new WaveManager(canvas);
+    this.zombieManager = new ZombieManager(canvas, this.particleManager);
+    this.fortressManager = new FortressManager(canvas);
+
+    // Object pools for performance (must be created before companionManager)
+    this.bulletPool = new ObjectPool(
+      () => new Bullet(),
+      (bullet) => bullet.reset(),
+      CONFIG.POOL.BULLETS_SIZE
+    );
+    
+    // Set fortress manager references for tower shooting
+    this.fortressManager.setReferences(this.bulletPool, this.zombieManager);
+    
+    // Companion manager needs bulletPool, so create it after
+    this.companionManager = new CompanionManager(canvas, this.bulletPool);
+
+    // Game state
+    this.gameOver = false;
+    this.lastShotTime = 0;
+    this.lastRegenTime = 0;
+    this.lastRank = 'Soldier';
+    this.startingCurrency = this.scoreManager.currency; // Store starting currency for coins earned calculation
+    this.ammoDepletedNotified = false; // Track ammo depletion notifications
+
+    // UI elements
+    this.initUIElements();
+
+    // Update best score display
+    this.updateBestDisplay();
+  }
+
+  initUIElements() {
+    this.healthFill = document.getElementById('healthfill') || document.querySelector('.health-fill');
+    this.damageFlash = document.getElementById('damageFlash');
+  }
+
+  reset() {
+    // Sync inventory from temporary managers if they exist (for menu purchases)
+    if (window.tempInventoryManager) {
+      this.inventoryManager.inventory = JSON.parse(JSON.stringify(window.tempInventoryManager.inventory));
+      this.inventoryManager.saveInventory();
+    }
+    if (window.tempShopManager && window.tempShopManager.scoreManager) {
+      this.scoreManager.currency = window.tempShopManager.scoreManager.currency;
+      this.scoreManager.addCurrency(0); // Save to localStorage
+    }
+
+    // Reset player
+    this.player = new Player(this.canvas);
+
+    // Phase 3: Reset spawn animation
+    this.player.resetSpawn();
+
+    // Apply equipped armor max health boost
+    const boosts = this.shopManager.getEquippedStatBoosts();
+    const maxHealth = CONFIG.PLAYER.MAX_HEALTH + boosts.maxHealth;
+    this.player.health = maxHealth;
+
+    // Reset all managers
+    this.zombieManager.reset();
+    this.waveManager.reset();
+    this.scoreManager.reset();
+    this.powerupManager.reset();
+    this.particleManager.clear();
+    this.bulletPool.releaseAll();
+    this.companionManager.reset();
+    this.fortressManager.reset();
+
+    // Reset game state
+    this.gameOver = false;
+    this.lastRegenTime = 0;
+    this.lastRank = 'Soldier';
+    this.startingCurrency = this.scoreManager.currency; // Store starting currency for coins earned calculation
+    this.ammoDepletedNotified = false; // Reset ammo notification flag
+    this.fortressTiersBuilt = new Set(); // Reset fortress tiers
+
+    // Start statistics tracking
+    this.statisticsManager.startGame();
+    const equipped = this.inventoryManager.getEquippedItems();
+    this.statisticsManager.updateEquipment(equipped.weapon, equipped.armor);
+
+    // Hide game over screen
+    if (screenManager) {
+      screenManager.hideOverlay('gameOverScreen');
+    }
+
+    // Spawn first wave
+    const zombies = this.waveManager.spawnWave();
+    this.zombieManager.addZombies(zombies);
+
+    // Start game loop
+    requestAnimationFrame(() => this.loop());
+  }
+
+  handlePauseToggle(isPaused) {
+    if (!isPaused && !this.gameOver) {
+      requestAnimationFrame(() => this.loop());
+    }
+  }
+
+  autoShoot() {
+    const now = Date.now();
+    
+    // Get equipped stat boosts
+    const boosts = this.shopManager.getEquippedStatBoosts();
+    const baseFireRate = CONFIG.PLAYER.FIRE_RATE;
+    const fireRate = baseFireRate * boosts.fireRate;
+    
+    if (now - this.lastShotTime < fireRate) return;
+
+    const target = this.zombieManager.findNearest(this.player.x, this.player.y);
+    if (!target) return;
+
+    const dx = target.x - this.player.x;
+    const dy = target.y - this.player.y;
+    const angle = Math.atan2(dy, dx);
+    
+    // Get equipped ammo
+    const equipped = this.inventoryManager.getEquippedItems();
+    let ammoType = null;
+    let ammoConsumed = false;
+    
+    if (equipped.ammo && this.inventoryManager.hasItem(equipped.ammo)) {
+      const ammoItem = this.shopManager.getItem(equipped.ammo);
+      if (ammoItem && ammoItem.type === 'ammunition') {
+        // Check weapon compatibility (get equipped weapon model)
+        const equippedWeapon = equipped.weapon ? this.shopManager.getItem(equipped.weapon) : null;
+        const weaponModel = equippedWeapon ? equippedWeapon.weaponModel : 'assault_rifle';
+        
+        // Check if ammo is compatible with weapon (or if no weapon, allow all ammo)
+        if (!equippedWeapon || !ammoItem.compatibleWeapons || ammoItem.compatibleWeapons.includes(weaponModel)) {
+          ammoType = ammoItem;
+          // Consume ammo - will consume once per bullet fired
+        }
+      }
+    }
+    
+    // Use equipped multishot or powerup multishot
+    let bulletCount = 1;
+    if (this.powerupManager.isMultishotActive()) {
+      bulletCount = CONFIG.PLAYER.MULTISHOT_COUNT;
+    } else if (boosts.multishot > 0) {
+      bulletCount = boosts.multishot;
+    }
+
+    // Consume ammo for all bullets
+    if (ammoType && equipped.ammo) {
+      const ammoNeeded = bulletCount;
+      const ammoQuantity = this.inventoryManager.getItemQuantity(equipped.ammo);
+
+      if (ammoQuantity >= ammoNeeded) {
+        // Enough ammo - consume it
+        this.inventoryManager.removeItem(equipped.ammo, ammoNeeded);
+        ammoConsumed = true;
+
+        // Check if this was the last ammo
+        const remainingAmmo = this.inventoryManager.getItemQuantity(equipped.ammo);
+        if (remainingAmmo === 0 && !this.ammoDepletedNotified) {
+          this.showAmmoDepletedNotification(ammoType.name);
+          this.ammoDepletedNotified = true;
+
+          // Reset notification flag after 3 seconds
+          setTimeout(() => {
+            this.ammoDepletedNotified = false;
+          }, 3000);
+        }
+      } else {
+        // Not enough ammo - use default ammo
+        ammoType = null;
+
+        // Show notification if not already shown
+        if (!this.ammoDepletedNotified) {
+          const ammoItem = this.shopManager.getItem(equipped.ammo);
+          this.showAmmoDepletedNotification(ammoItem ? ammoItem.name : 'Special Ammo');
+          this.ammoDepletedNotified = true;
+
+          // Reset notification flag after 3 seconds
+          setTimeout(() => {
+            this.ammoDepletedNotified = false;
+          }, 3000);
+        }
+      }
+    }
+
+    // Get upgrade boosts for bullet stats (crit chance, crit multiplier)
+    const bulletBoosts = this.shopManager.getEquippedStatBoosts();
+
+    for (let i = 0; i < bulletCount; i++) {
+      const bullet = this.bulletPool.get();
+      const spreadAngle = bulletCount > 1 ? angle + (i - 1) * 0.15 : angle;
+      bullet.init(this.player.x, this.player.y, spreadAngle, ammoType, bulletBoosts);
+      bullet.isPlayerBullet = true; // Mark as player bullet
+
+      // Track bullet fired
+      this.statisticsManager.trackBulletFired();
+    }
+
+    // Spawn multishot energy particles when multishot is active
+    if (bulletCount > 1) {
+      this.particleManager.spawnMultishotEnergy(this.player.x, this.player.y, angle);
+    }
+
+    this.player.reloadProgress = 1;
+    this.lastShotTime = now;
+  }
+
+  handleBulletCollisions() {
+    this.zombieManager.checkBulletCollisions(
+      this.bulletPool,
+      (zombie, index, damageDealt) => this.onZombieHit(zombie, index, damageDealt)
+    );
+  }
+
+  onZombieHit(zombie, index, damageDealt) {
+    // Track bullet hit
+    this.statisticsManager.trackBulletHit();
+
+    // Hit flash effect
+    this.ctx.save();
+    this.ctx.globalAlpha = 0.5;
+    this.ctx.fillStyle = 'white';
+    this.ctx.beginPath();
+    this.ctx.arc(zombie.x, zombie.y, zombie.size * 1.2, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
+
+    // Apply lifesteal if player has it from upgrades
+    const boosts = this.shopManager.getEquippedStatBoosts();
+    if (boosts.lifesteal > 0 && damageDealt > 0) {
+      const healAmount = damageDealt * boosts.lifesteal;
+      const maxHealth = CONFIG.PLAYER.MAX_HEALTH + boosts.maxHealth;
+      this.player.health = Math.min(maxHealth, this.player.health + healAmount);
+
+      // Spawn small heal particles for visual feedback
+      if (this.particleManager && healAmount > 0.5) {
+        this.particleManager.spawnHealPlus(this.player.x, this.player.y);
+      }
+    }
+
+    // Zombie killed
+    if (zombie.health <= 0) {
+      this.handleZombieKill(zombie, index);
+    }
+  }
+
+  handleZombieKill(zombie, index) {
+    // Calculate hit angle for death animation
+    const dx = zombie.x - this.player.x;
+    const dy = zombie.y - this.player.y;
+    const hitAngle = Math.atan2(dy, dx);
+
+    // Kill zombie (start death animation)
+    this.zombieManager.killZombie(index, hitAngle, (killedZombie) => {
+      // Track kill in achievement manager
+      this.achievementManager.trackKill(killedZombie);
+
+      // Track kill in statistics
+      this.statisticsManager.trackKill();
+
+      // Add score with upgrade multiplier
+      const boosts = this.shopManager.getEquippedStatBoosts();
+      const oldCombo = this.scoreManager.comboCount;
+      this.scoreManager.addKill(boosts.scoreMultiplier);
+
+      // Trigger combo glow if combo increased
+      const newCombo = this.scoreManager.comboCount;
+      if (newCombo > oldCombo && newCombo > 0) {
+        this.player.triggerComboGlow();
+      }
+
+      // Track combo in statistics
+      this.statisticsManager.trackCombo(this.scoreManager.comboCount);
+
+      // Track multikill
+      this.player.addKill();
+
+      // Spawn blood particles
+      const particleCount = killedZombie.type === 'boss' ? 30 : 12;
+      const isHealer = killedZombie.type === 'healer';
+      this.particleManager.spawnBloodSpray(killedZombie.x, killedZombie.y, hitAngle, particleCount, killedZombie.type === 'boss', isHealer);
+
+      // Boss explosion effects
+      if (killedZombie.type === 'boss') {
+        this.particleManager.spawnBossExplosionRing(killedZombie.x, killedZombie.y);
+        this.screenShake(12, 5);
+      }
+
+      // Powerup drop
+      if (this.powerupManager.checkDropChance(this.zombieManager.getKillCount())) {
+        this.powerupManager.spawn(killedZombie.x, killedZombie.y);
+      }
+
+      // Check for rank change
+      this.checkRankChange();
+
+      // Check achievements
+      const scoreData = this.scoreManager.getData();
+      this.achievementManager.check(
+        this.waveManager.getWave(),
+        scoreData.score,
+        scoreData.rank,
+        scoreData.combo
+      );
+    });
+  }
+
+  checkRankChange() {
+    const currentRank = this.scoreManager.getRank();
+    if (currentRank !== this.lastRank) {
+      // Enhanced rank-up animation
+      this.showRankUpAnimation(currentRank);
+
+      // Enhanced particle burst - multiple waves for dramatic effect
+      const rankColor = this.scoreManager.getRankColor();
+      this.particleManager.spawnRankUpSparkles(this.player.x, this.player.y, rankColor);
+
+      // Second burst delayed slightly for cascading effect
+      setTimeout(() => {
+        this.particleManager.spawnRankUpSparkles(this.player.x, this.player.y, rankColor);
+      }, 150);
+
+      // Extra burst for Legend rank
+      if (currentRank === 'Legend') {
+        setTimeout(() => {
+          this.particleManager.spawnRankUpSparkles(this.player.x, this.player.y, rankColor);
+        }, 300);
+      }
+
+      // Screen shake for extra impact
+      const shakeIntensity = currentRank === 'Legend' ? 8 : (currentRank === 'Elite' ? 6 : 4);
+      this.screenShake(10, shakeIntensity);
+
+      this.lastRank = currentRank;
+    }
+  }
+
+  showRankUpAnimation(newRank) {
+    // Enhanced screen flash effect - more dramatic
+    const flashElement = document.getElementById('rankUpFlash');
+    if (flashElement) {
+      const rankColor = this.scoreManager.getRankColor();
+      flashElement.style.background = rankColor;
+      flashElement.style.opacity = '0.8'; // Increased from 0.6 for more impact
+      flashElement.style.display = 'block';
+
+      // Double flash for extra emphasis
+      setTimeout(() => {
+        flashElement.style.opacity = '0.4';
+        setTimeout(() => {
+          flashElement.style.opacity = '0.8';
+          setTimeout(() => {
+            flashElement.style.opacity = '0';
+            setTimeout(() => {
+              flashElement.style.display = 'none';
+            }, 500);
+          }, 150);
+        }, 100);
+      }, 200);
+    }
+
+    // Enhanced rank-up notification banner
+    const notification = document.getElementById('rankUpNotification');
+    const rankIcon = document.getElementById('rankUpIcon');
+    const rankText = document.getElementById('rankUpRank');
+
+    if (notification && rankIcon && rankText) {
+      const rankIcons = {
+        'Soldier': '🎖️',
+        'Veteran': '⭐',
+        'Elite': '💎',
+        'Legend': '👑'
+      };
+
+      rankIcon.textContent = rankIcons[newRank] || '⭐';
+      rankText.textContent = newRank;
+
+      notification.style.display = 'flex';
+      notification.classList.add('rank-up-show');
+
+      // Notification stays longer for higher ranks
+      const displayDuration = newRank === 'Legend' ? 4000 : (newRank === 'Elite' ? 3000 : 2500);
+
+      setTimeout(() => {
+        notification.classList.remove('rank-up-show');
+        setTimeout(() => {
+          notification.style.display = 'none';
+        }, 500);
+      }, displayDuration);
+    }
+  }
+
+  screenShake(frames, intensity) {
+    const originalTransform = this.canvas.style.transform;
+    let shakeFrame = 0;
+    const shake = setInterval(() => {
+      if (shakeFrame++ > frames) {
+        clearInterval(shake);
+        this.canvas.style.transform = originalTransform;
+      } else {
+        const offset = (shakeFrame % 2 === 0 ? 1 : -1) * intensity;
+        this.canvas.style.transform = `translate(${offset}px, ${offset}px)`;
+      }
+    }, 30);
+  }
+
+  flashDamage() {
+    this.damageFlash.style.opacity = '1';
+    setTimeout(() => {
+      this.damageFlash.style.opacity = '0';
+    }, 100);
+  }
+
+  showAmmoDepletedNotification(ammoName) {
+    // Use achievement notification system for consistency
+    if (this.achievementNotification) {
+      this.achievementNotification.textContent = `⚠️ ${ammoName} Depleted!`;
+      this.achievementNotification.style.display = 'block';
+      this.achievementNotification.style.background = 'linear-gradient(135deg, #ff6b35 0%, #ff9068 100%)';
+
+      setTimeout(() => {
+        this.achievementNotification.style.display = 'none';
+        this.achievementNotification.style.background = ''; // Reset to default
+      }, 2000);
+    }
+  }
+
+  showCompanionUnlockNotification(companionType) {
+    const names = {
+      drone: 'Attack Drone',
+      robot: 'Combat Robot',
+      turret: 'Auto Turret',
+      medic: 'Medical Drone',
+      tank: 'Tank Companion'
+    };
+
+    if (this.achievementNotification) {
+      this.achievementNotification.textContent = `🤖 ${names[companionType] || companionType} Unlocked!`;
+      this.achievementNotification.style.display = 'block';
+      this.achievementNotification.style.background = 'linear-gradient(135deg, #00d4ff 0%, #0080ff 100%)';
+
+      setTimeout(() => {
+        this.achievementNotification.style.display = 'none';
+        this.achievementNotification.style.background = ''; // Reset to default
+      }, 3000);
+    }
+  }
+
+  showFortressUnlockNotification(fortressName) {
+    if (this.achievementNotification) {
+      this.achievementNotification.textContent = `🏰 ${fortressName} Built!`;
+      this.achievementNotification.style.display = 'block';
+      this.achievementNotification.style.background = 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)';
+
+      setTimeout(() => {
+        this.achievementNotification.style.display = 'none';
+        this.achievementNotification.style.background = ''; // Reset to default
+      }, 2500);
+    }
+  }
+
+  checkFortressTierUnlocks(wave) {
+    // Track what's been built
+    if (!this.fortressTiersBuilt) {
+      this.fortressTiersBuilt = new Set();
+    }
+
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+    // Reduced radius to keep structures within visible screen bounds
+    // Canvas is 360x600, so max safe distance from center is ~150px
+    const radius = 50; // Reduced from 80 to keep structures visible and closer to center
+
+    // Tier 1: Wave 5 - Fence perimeter (250x250 square, centered, continuous)
+    if (wave >= 5 && !this.fortressTiersBuilt.has('tier1')) {
+      this.fortressTiersBuilt.add('tier1');
+
+      // Build 250x250 square fence centered on the map
+      const fenceSize = 250; // 250x250 square (1:1 ratio)
+      const fenceHeight = 10; // Thickness of fence segments
+      
+      // Calculate center position for the square
+      const fenceCenterX = centerX;
+      const fenceCenterY = centerY;
+      
+      // Calculate top-left corner of the square
+      const fenceX = fenceCenterX - fenceSize / 2;
+      const fenceY = fenceCenterY - fenceSize / 2;
+      
+      // Ensure fence stays within canvas bounds
+      const clampedFenceX = Math.max(0, Math.min(fenceX, this.canvas.width - fenceSize));
+      const clampedFenceY = Math.max(0, Math.min(fenceY, this.canvas.height - fenceSize));
+      
+      // Top fence - spans full width of square
+      const topFenceX = clampedFenceX;
+      const topFenceY = clampedFenceY;
+      const topFenceWidth = fenceSize;
+      this.fortressManager.addStructure('fence', topFenceX, topFenceY, topFenceWidth, fenceHeight);
+      
+      // Bottom fence - spans full width of square
+      const bottomFenceX = clampedFenceX;
+      const bottomFenceY = clampedFenceY + fenceSize - fenceHeight;
+      const bottomFenceWidth = fenceSize;
+      this.fortressManager.addStructure('fence', bottomFenceX, bottomFenceY, bottomFenceWidth, fenceHeight);
+      
+      // Left fence - connects top to bottom (starts after top fence, ends before bottom fence)
+      const leftFenceX = clampedFenceX;
+      const leftFenceY = clampedFenceY + fenceHeight;
+      const leftFenceHeight = fenceSize - (fenceHeight * 2); // Height minus top and bottom
+      if (leftFenceHeight > 0) {
+        this.fortressManager.addStructure('fence', leftFenceX, leftFenceY, fenceHeight, leftFenceHeight);
+      }
+      
+      // Right fence - connects top to bottom (starts after top fence, ends before bottom fence)
+      const rightFenceX = clampedFenceX + fenceSize - fenceHeight;
+      const rightFenceY = clampedFenceY + fenceHeight;
+      const rightFenceHeight = fenceSize - (fenceHeight * 2); // Height minus top and bottom
+      if (rightFenceHeight > 0) {
+        this.fortressManager.addStructure('fence', rightFenceX, rightFenceY, fenceHeight, rightFenceHeight);
+      }
+
+      this.showFortressUnlockNotification('Wooden Fence Perimeter');
+    }
+
+    // Tier 2: Wave 15 - Barricade corners
+    if (wave >= 15 && !this.fortressTiersBuilt.has('tier2')) {
+      this.fortressTiersBuilt.add('tier2');
+
+      const barricadeSize = 25;
+      const offset = radius * 0.7; // ~35px from center
+
+      // 4 corner barricades - ensure all within bounds
+      const topLeftX = Math.max(0, centerX - offset - barricadeSize/2);
+      const topLeftY = Math.max(0, centerY - offset - barricadeSize/2);
+      const topRightX = Math.min(this.canvas.width - barricadeSize, centerX + offset - barricadeSize/2);
+      const topRightY = Math.max(0, centerY - offset - barricadeSize/2);
+      const bottomLeftX = Math.max(0, centerX - offset - barricadeSize/2);
+      const bottomLeftY = Math.min(this.canvas.height - barricadeSize, centerY + offset - barricadeSize/2);
+      const bottomRightX = Math.min(this.canvas.width - barricadeSize, centerX + offset - barricadeSize/2);
+      const bottomRightY = Math.min(this.canvas.height - barricadeSize, centerY + offset - barricadeSize/2);
+
+      this.fortressManager.addStructure('barricade', topLeftX, topLeftY, barricadeSize, barricadeSize);
+      this.fortressManager.addStructure('barricade', topRightX, topRightY, barricadeSize, barricadeSize);
+      this.fortressManager.addStructure('barricade', bottomLeftX, bottomLeftY, barricadeSize, barricadeSize);
+      this.fortressManager.addStructure('barricade', bottomRightX, bottomRightY, barricadeSize, barricadeSize);
+
+      this.showFortressUnlockNotification('Corner Barricades');
+    }
+
+    // Tier 3: Wave 30 - Gate entrances
+    if (wave >= 30 && !this.fortressTiersBuilt.has('tier3')) {
+      this.fortressTiersBuilt.add('tier3');
+
+      const gateWidth = 30;
+      const gateHeight = 15;
+      const gateRadius = radius + 10; // Reduced from +15
+
+      // Top and bottom gates - ensure within bounds
+      const topGateY = Math.max(0, centerY - gateRadius);
+      const bottomGateY = Math.min(this.canvas.height - gateHeight, centerY + gateRadius - gateHeight);
+      this.fortressManager.addStructure('gate', centerX - gateWidth/2, topGateY, gateWidth, gateHeight);
+      this.fortressManager.addStructure('gate', centerX - gateWidth/2, bottomGateY, gateWidth, gateHeight);
+
+      this.showFortressUnlockNotification('Reinforced Gates');
+    }
+
+    // Tier 4: Wave 50 - Stone walls (continuous, no gaps)
+    if (wave >= 50 && !this.fortressTiersBuilt.has('tier4')) {
+      this.fortressTiersBuilt.add('tier4');
+
+      const wallHeight = 12;
+      const wallRadius = radius + 15; // Reduced from +25
+
+      // Build continuous wall perimeter - forms a complete square
+      // Top wall - spans full width
+      const topWallY = Math.max(0, centerY - wallRadius);
+      this.fortressManager.addStructure('wall', 0, topWallY, this.canvas.width, wallHeight);
+      
+      // Bottom wall - spans full width
+      const bottomWallY = Math.min(this.canvas.height - wallHeight, centerY + wallRadius - wallHeight);
+      this.fortressManager.addStructure('wall', 0, bottomWallY, this.canvas.width, wallHeight);
+      
+      // Left wall - connects top to bottom
+      const leftWallX = 0;
+      const leftWallY = topWallY + wallHeight;
+      const leftWallHeight = Math.max(0, bottomWallY - leftWallY);
+      if (leftWallHeight > 0) {
+        this.fortressManager.addStructure('wall', leftWallX, leftWallY, wallHeight, leftWallHeight);
+      }
+      
+      // Right wall - connects top to bottom
+      const rightWallX = this.canvas.width - wallHeight;
+      const rightWallY = topWallY + wallHeight;
+      const rightWallHeight = Math.max(0, bottomWallY - rightWallY);
+      if (rightWallHeight > 0) {
+        this.fortressManager.addStructure('wall', rightWallX, rightWallY, wallHeight, rightWallHeight);
+      }
+
+      this.showFortressUnlockNotification('Stone Wall Fortifications');
+    }
+
+    // Tier 5: Wave 75 - Guard towers at fence intersection corners
+    // Towers are placed at the 4 corners where fence segments intersect (fence remains, towers are added)
+    if (wave >= 75 && !this.fortressTiersBuilt.has('tier5')) {
+      this.fortressTiersBuilt.add('tier5');
+
+      const towerSize = 20;
+      
+      // Calculate fence positions (same as Tier 1 fence - 250x250 square centered)
+      const fenceSize = 250; // Same as fence square size
+      const fenceHeight = 10; // Thickness of fence segments
+      const fenceCenterX = centerX;
+      const fenceCenterY = centerY;
+      const fenceX = fenceCenterX - fenceSize / 2;
+      const fenceY = fenceCenterY - fenceSize / 2;
+      
+      // Ensure fence coordinates stay within bounds
+      const clampedFenceX = Math.max(0, Math.min(fenceX, this.canvas.width - fenceSize));
+      const clampedFenceY = Math.max(0, Math.min(fenceY, this.canvas.height - fenceSize));
+      
+      // Place towers at the 4 intersection corners where fence segments meet:
+      // Top-left: where top fence and left fence intersect
+      const topLeftTowerX = clampedFenceX - towerSize / 2;
+      const topLeftTowerY = clampedFenceY - towerSize / 2;
+      
+      // Top-right: where top fence and right fence intersect
+      const topRightTowerX = clampedFenceX + fenceSize - towerSize / 2;
+      const topRightTowerY = clampedFenceY - towerSize / 2;
+      
+      // Bottom-left: where bottom fence and left fence intersect
+      const bottomLeftTowerX = clampedFenceX - towerSize / 2;
+      const bottomLeftTowerY = clampedFenceY + fenceSize - towerSize / 2;
+      
+      // Bottom-right: where bottom fence and right fence intersect
+      const bottomRightTowerX = clampedFenceX + fenceSize - towerSize / 2;
+      const bottomRightTowerY = clampedFenceY + fenceSize - towerSize / 2;
+      
+      // Ensure towers stay within canvas bounds
+      const topLeftX = Math.max(0, Math.min(topLeftTowerX, this.canvas.width - towerSize));
+      const topLeftY = Math.max(0, Math.min(topLeftTowerY, this.canvas.height - towerSize));
+      const topRightX = Math.max(0, Math.min(topRightTowerX, this.canvas.width - towerSize));
+      const topRightY = Math.max(0, Math.min(topRightTowerY, this.canvas.height - towerSize));
+      const bottomLeftX = Math.max(0, Math.min(bottomLeftTowerX, this.canvas.width - towerSize));
+      const bottomLeftY = Math.max(0, Math.min(bottomLeftTowerY, this.canvas.height - towerSize));
+      const bottomRightX = Math.max(0, Math.min(bottomRightTowerX, this.canvas.width - towerSize));
+      const bottomRightY = Math.max(0, Math.min(bottomRightTowerY, this.canvas.height - towerSize));
+
+      // Add towers at fence intersection corners (fence remains in place)
+      this.fortressManager.addStructure('tower', topLeftX, topLeftY, towerSize, towerSize);
+      this.fortressManager.addStructure('tower', topRightX, topRightY, towerSize, towerSize);
+      this.fortressManager.addStructure('tower', bottomLeftX, bottomLeftY, towerSize, towerSize);
+      this.fortressManager.addStructure('tower', bottomRightX, bottomRightY, towerSize, towerSize);
+
+      this.showFortressUnlockNotification('Guard Tower Defense Grid');
+    }
+  }
+
+  update() {
+    if (this.controls.isPaused || this.gameOver) return;
+
+    // Phase 3: Skip controls and combat during death animation
+    const isDying = this.player.dying;
+
+    // Update controls (apply keyboard input to player) - skip during death
+    if (!isDying) {
+      this.controls.updatePlayer(this.player);
+    }
+
+    // Update powerup manager (handles timer updates and powerup logic)
+    this.powerupManager.updatePlayerSpeed(this.player, this.shopManager);
+    this.powerupManager.update(this.player, this.shopManager);
+
+    // Update player
+    this.player.update();
+
+    // Update zombies and handle collision - skip damage during death
+    const damage = this.zombieManager.update(
+      this.player.x,
+      this.player.y,
+      this.powerupManager.isShieldActive()
+    );
+
+    if (damage > 0 && !isDying) {
+      this.player.health -= damage;
+      this.player.takeHit();
+      this.flashDamage();
+    }
+
+    // Update companions
+    const boosts = this.shopManager.getEquippedStatBoosts();
+    this.companionManager.update(
+      this.player.x,
+      this.player.y,
+      this.zombieManager,
+      this.player,
+      boosts
+    );
+
+    // Check companion-zombie collisions
+    this.companionManager.checkZombieCollisions(this.zombieManager.zombies);
+
+    // Update fortress structures
+    this.fortressManager.update();
+
+    // Handle fortress-zombie collisions
+    this.fortressManager.handleZombieCollisions(this.zombieManager.zombies);
+
+    // Handle bullet collisions with fortress structures
+    this.fortressManager.handleBulletCollisions(this.bulletPool);
+
+    // Update bullets
+    for (const bullet of this.bulletPool.getInUse()) {
+      bullet.update(this.canvas.width, this.canvas.height);
+    }
+
+    // Auto-shoot - skip during death
+    if (!isDying) {
+      this.autoShoot();
+
+      // Handle bullet collisions
+      this.handleBulletCollisions();
+
+      // Health regeneration (with equipped armor boosts) - skip during death
+      const boosts = this.shopManager.getEquippedStatBoosts();
+      const maxHealth = CONFIG.PLAYER.MAX_HEALTH + boosts.maxHealth;
+      const regenRate = CONFIG.PLAYER.REGEN_RATE * boosts.regenRate;
+      const now = Date.now();
+      if (this.player.health < maxHealth && this.player.health > 0) {
+        if (now - this.lastRegenTime >= CONFIG.PLAYER.REGEN_INTERVAL) {
+          this.player.health = Math.min(maxHealth, this.player.health + regenRate);
+          this.lastRegenTime = now;
+        }
+      }
+      // Cap health at current max
+      this.player.health = Math.min(maxHealth, this.player.health);
+    }
+
+    // Wave completion check
+    const aliveZombies = this.zombieManager.getAliveCount();
+    if (this.waveManager.isWaveComplete(aliveZombies)) {
+      const scoreData = this.scoreManager.getData();
+      this.waveManager.completeWave(scoreData.score, this.scoreManager, this.shopManager);
+
+      // Track wave completion in statistics
+      this.statisticsManager.waveCompleted();
+
+      // Restore all fortress structures to full health
+      this.fortressManager.restoreAll();
+
+      // Restore all companions to full health (revive dying ones)
+      this.companionManager.restoreAll();
+
+      // Check for companion unlocks
+      const currentWave = this.waveManager.getWave();
+      const unlocked = this.companionManager.checkUnlocks(currentWave);
+      if (unlocked.length > 0) {
+        for (const type of unlocked) {
+          // Auto-spawn newly unlocked companion at player position
+          this.companionManager.spawn(type, this.player.x, this.player.y);
+          this.showCompanionUnlockNotification(type);
+        }
+      }
+      
+      // Respawn all previously unlocked companions that died during the wave
+      // (Only respawn if they're unlocked in THIS game session and not already spawned)
+      // Only respawn companions that were unlocked at or before the current wave
+      const companionTypes = ['drone', 'robot', 'turret', 'medic', 'tank'];
+      for (const type of companionTypes) {
+        const config = CONFIG.COMPANIONS[type.toUpperCase()];
+        // Only respawn if companion is unlocked AND the current wave is >= unlock wave
+        if (this.companionManager.isUnlocked(type) && currentWave >= config.UNLOCK_WAVE) {
+          // Check if this companion type is already spawned and alive
+          const alreadySpawned = this.companionManager.companions.some(
+            c => c.type === type && !c.dying
+          );
+          if (!alreadySpawned) {
+            // Respawn at player position (companion died during wave)
+            this.companionManager.spawn(type, this.player.x, this.player.y);
+          }
+        }
+      }
+
+      // Check for fortress tier unlocks and auto-build
+      this.checkFortressTierUnlocks(currentWave);
+    }
+
+    // Start next wave (only after wave completion delay and if no zombies)
+    // Only spawn if wave is not pending and there are truly no zombies (alive or dying)
+    if (!this.waveManager.isPending() && aliveZombies === 0 && this.zombieManager.getTotalCount() === 0 && this.waveManager.waveStarted === false) {
+      const zombies = this.waveManager.spawnWave();
+      if (zombies && zombies.length > 0) {
+        this.zombieManager.addZombies(zombies);
+      }
+    }
+
+    // Game over check - Phase 3: Start death animation instead of immediate game over
+    if (this.player.health <= 0 && !this.gameOver && !this.player.dying) {
+      this.player.startDeath();
+      // Spawn death particles
+      this.particleManager.spawnBloodSpray(this.player.x, this.player.y, 0, 20, false, false);
+      // Spawn explosion ring
+      this.particleManager.spawnBossExplosionRing(this.player.x, this.player.y);
+    }
+    
+    // Phase 3: Check if death animation is complete, then show game over
+    if (this.player.isDeathComplete() && !this.gameOver) {
+      this.gameOver = true;
+      this.showGameOver();
+      return;
+    }
+
+    // Spawn footstep dust particles - skip during death
+    if (!isDying && Math.abs(this.player.vx) + Math.abs(this.player.vy) > 0 && Math.random() < 0.3) {
+      this.particleManager.spawnDust(this.player.x, this.player.y);
+    }
+
+    // Spawn speed energy particles (motion streaks) - skip during death
+    if (!isDying && this.powerupManager.isSpeedActive() && Math.abs(this.player.vx) + Math.abs(this.player.vy) > 0 && Math.random() < 0.7) {
+      this.particleManager.spawnSpeedEnergy(this.player.x, this.player.y, this.player.vx, this.player.vy);
+    }
+
+    // Update all particle systems
+    this.particleManager.update();
+
+    // Sync powerup collection count to achievement manager
+    this.achievementManager.trackPowerup(this.powerupManager.collectedCount);
+
+    // Update HUD
+    this.updateHUD();
+  }
+
+  updateHUD() {
+    const scoreData = this.scoreManager.getData();
+
+    // Update score, wave, currency
+    document.getElementById('wave').textContent = this.waveManager.getWave();
+    document.getElementById('score').textContent = scoreData.score.toLocaleString();
+    document.getElementById('coinCount').textContent = scoreData.currency.toLocaleString();
+
+    // Update rank with visual styling
+    const rank = scoreData.rank;
+    const rankElement = document.getElementById('rank');
+    const rankCard = document.getElementById('rankCard');
+    const rankIcon = document.getElementById('rankIcon');
+    
+    rankElement.textContent = rank;
+    
+    // Remove all rank classes
+    rankCard.className = 'hud-stat-card rank-card';
+    
+    // Apply rank-specific styling
+    const rankLower = rank.toLowerCase();
+    rankCard.classList.add(rankLower);
+    
+    // Update rank icon
+    const rankIcons = {
+      'Soldier': '🎖️',
+      'Veteran': '⭐',
+      'Elite': '💎',
+      'Legend': '👑'
+    };
+    rankIcon.textContent = rankIcons[rank] || '🎖️';
+
+    // Update rank progress
+    const progressContainer = document.getElementById('rankProgressContainer');
+    const progressFill = document.getElementById('rankProgressFill');
+    const progressText = document.getElementById('rankProgressText');
+    
+    const nextRankName = this.scoreManager.getNextRankName();
+    if (nextRankName && progressContainer && progressFill && progressText) {
+      const progress = this.scoreManager.getRankProgress();
+      const pointsNeeded = this.scoreManager.getPointsToNextRank();
+      
+      progressContainer.style.display = 'block';
+      progressFill.style.width = `${progress * 100}%`;
+      progressText.textContent = `${pointsNeeded} to ${nextRankName}`;
+    } else if (progressContainer) {
+      progressContainer.style.display = 'none';
+    }
+
+    // Update combo display
+    const comboDisplay = document.getElementById('comboDisplay');
+    const comboCount = document.getElementById('comboCount');
+
+    if (this.scoreManager.isComboActive()) {
+      comboDisplay.style.display = 'flex';
+      comboCount.textContent = scoreData.combo;
+    } else {
+      comboDisplay.style.display = 'none';
+    }
+
+    // Update powerup indicator
+    const powerupIndicator = document.getElementById('powerupIndicator');
+    const activePowerup = this.powerupManager.getCurrentPowerup();
+    const powerupIcon = document.getElementById('powerupIcon');
+    const powerupName = document.getElementById('activePowerup');
+    const powerupTimer = document.getElementById('powerupTimer');
+
+    if (activePowerup !== 'None') {
+      powerupIndicator.style.display = 'flex';
+      
+      // Powerup icons
+      const powerupIcons = {
+        'SHIELD': '🛡️',
+        'SPEED': '⚡',
+        'MULTISHOT': '🔫'
+      };
+      powerupIcon.textContent = powerupIcons[activePowerup] || '⚡';
+      powerupName.textContent = activePowerup;
+      
+      // Calculate remaining time
+      let remainingTime = 0;
+      if (activePowerup === 'SHIELD' && this.powerupManager.isShieldActive()) {
+        remainingTime = this.powerupManager.timers.shield;
+      } else if (activePowerup === 'SPEED' && this.powerupManager.isSpeedActive()) {
+        remainingTime = this.powerupManager.timers.speed;
+      } else if (activePowerup === 'MULTISHOT' && this.powerupManager.isMultishotActive()) {
+        remainingTime = this.powerupManager.timers.multishot;
+      }
+      
+      if (remainingTime > Date.now()) {
+        const seconds = Math.ceil((remainingTime - Date.now()) / 1000);
+        powerupTimer.textContent = `${seconds}s`;
+      } else {
+        powerupTimer.textContent = '';
+      }
+    } else {
+      powerupIndicator.style.display = 'none';
+    }
+
+    // Update health with color coding (account for equipped armor max health boost)
+    const boosts = this.shopManager.getEquippedStatBoosts();
+    const maxHealth = CONFIG.PLAYER.MAX_HEALTH + boosts.maxHealth;
+    const health = Math.max(0, Math.floor(this.player.health));
+    const healthElement = document.getElementById('health');
+    const healthMaxElement = document.querySelector('.health-max');
+    const healthPercent = maxHealth > 0 ? (this.player.health / maxHealth) * 100 : 0;
+    
+    if (healthElement) {
+      healthElement.textContent = health;
+    }
+    if (healthMaxElement) {
+      healthMaxElement.textContent = `/${maxHealth}`;
+    }
+    
+    // Update health bar if element exists
+    if (this.healthFill) {
+      this.healthFill.style.width = Math.max(0, healthPercent) + '%';
+      
+      // Health bar color based on health level
+      if (healthPercent > 60) {
+        this.healthFill.style.background = 'linear-gradient(90deg, #00ff00 0%, #7fff00 50%, #00ff00 100%)';
+        this.healthFill.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.6), 0 0 20px rgba(0, 255, 0, 0.3)';
+      } else if (healthPercent > 30) {
+        this.healthFill.style.background = 'linear-gradient(90deg, #ffaa00 0%, #ff8800 50%, #ffaa00 100%)';
+        this.healthFill.style.boxShadow = '0 0 10px rgba(255, 170, 0, 0.6), 0 0 20px rgba(255, 170, 0, 0.3)';
+      } else {
+        this.healthFill.style.background = 'linear-gradient(90deg, #ff0000 0%, #cc0000 50%, #ff0000 100%)';
+        this.healthFill.style.boxShadow = '0 0 10px rgba(255, 0, 0, 0.8), 0 0 20px rgba(255, 0, 0, 0.5)';
+      }
+    }
+    
+    // Health text color
+    if (healthElement) {
+      if (healthPercent > 60) {
+        healthElement.style.color = '#ffeb3b';
+      } else if (healthPercent > 30) {
+        healthElement.style.color = '#ff9800';
+      } else {
+        healthElement.style.color = '#ff4444';
+        // Pulse animation for low health
+        healthElement.style.animation = healthPercent > 0 ? 'pulse 0.5s ease-in-out infinite' : 'none';
+      }
+    }
+  }
+
+  updateBestDisplay() {
+    const scoreData = this.scoreManager.getData();
+    const bestScoreEl = document.getElementById('bestScore');
+    if (bestScoreEl) {
+      bestScoreEl.textContent = scoreData.bestScore;
+    }
+    const menuBestEl = document.getElementById('menuBest');
+    if (menuBestEl) {
+      menuBestEl.textContent = scoreData.bestScore;
+    }
+  }
+
+  draw() {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Draw all particle systems (background layer)
+    this.particleManager.draw(this.ctx);
+
+    // Draw fortress structures (behind zombies)
+    this.fortressManager.draw(this.ctx);
+
+    // Draw zombies
+    this.zombieManager.draw(this.ctx);
+
+    // Draw companions
+    this.companionManager.draw(this.ctx);
+
+    // Draw player
+    const target = this.zombieManager.findNearest(this.player.x, this.player.y);
+    const scoreData = this.scoreManager.getData();
+
+    // Get equipped weapon model
+    let weaponModel = 'assault_rifle'; // default
+    if (this.shopManager && this.inventoryManager) {
+      const equippedWeapon = this.inventoryManager.getEquipped('weapon');
+      if (equippedWeapon) {
+        const weaponItem = this.shopManager.getItem(equippedWeapon);
+        if (weaponItem && weaponItem.weaponModel) {
+          weaponModel = weaponItem.weaponModel;
+        }
+      }
+    }
+
+    // Get equipped armor model
+    let armorModel = 'light'; // default
+    if (this.shopManager && this.inventoryManager) {
+      const equippedArmor = this.inventoryManager.getEquipped('armor');
+      if (equippedArmor) {
+        const armorItem = this.shopManager.getItem(equippedArmor);
+        if (armorItem && armorItem.armorModel) {
+          armorModel = armorItem.armorModel;
+        }
+      }
+    }
+
+    this.player.drawArm(this.ctx, target, weaponModel);
+    // Get max health with boosts for accurate health percentage
+    const boosts = this.shopManager.getEquippedStatBoosts();
+    const maxHealth = CONFIG.PLAYER.MAX_HEALTH + boosts.maxHealth;
+    this.player.draw(this.ctx, scoreData.rank, this.powerupManager, armorModel, maxHealth);
+
+    // Draw shield effect
+    this.powerupManager.drawShieldEffect(this.ctx, this.player);
+
+    // Draw bullets
+    for (const bullet of this.bulletPool.getInUse()) {
+      if (bullet.active) bullet.draw(this.ctx);
+    }
+
+    // Draw powerups and notices
+    this.powerupManager.draw(this.ctx);
+
+    // Draw low health screen border warning (≤20% health)
+    this.drawLowHealthWarning();
+  }
+
+  drawLowHealthWarning() {
+    // Check if health is ≤ 20%
+    const boosts = this.shopManager.getEquippedStatBoosts();
+    const maxHealth = CONFIG.PLAYER.MAX_HEALTH + boosts.maxHealth;
+    const healthPercent = (this.player.health / maxHealth) * 100;
+
+    if (healthPercent <= 20) {
+      const pulseTime = performance.now() / 500;
+      const alpha = 0.3 + Math.sin(pulseTime) * 0.3; // Pulse between 0.3 and 0.6
+
+      this.ctx.save();
+      this.ctx.fillStyle = `rgba(255,0,0,${alpha})`;
+      
+      // Draw vignette border (edges of screen)
+      const borderWidth = 20;
+      // Top border
+      this.ctx.fillRect(0, 0, this.canvas.width, borderWidth);
+      // Bottom border
+      this.ctx.fillRect(0, this.canvas.height - borderWidth, this.canvas.width, borderWidth);
+      // Left border
+      this.ctx.fillRect(0, 0, borderWidth, this.canvas.height);
+      // Right border
+      this.ctx.fillRect(this.canvas.width - borderWidth, 0, borderWidth, this.canvas.height);
+
+      this.ctx.restore();
+    }
+  }
+
+  showGameOver() {
+    // Hide pause button
+    const pauseButton = document.querySelector('.pause-button');
+    if (pauseButton) {
+      pauseButton.classList.remove('show');
+    }
+
+    // Update best score
+    const wasNewRecord = this.scoreManager.updateBestScore();
+    this.updateBestDisplay();
+
+    // Get final stats
+    const scoreData = this.scoreManager.getData();
+    const finalWave = this.waveManager.getWave();
+    const zombiesKilled = this.zombieManager.getKillCount();
+    const coinsEarned = scoreData.currency - this.startingCurrency;
+
+    // Update persistent rank
+    this.scoreManager.updatePersistentRank(finalWave, zombiesKilled);
+
+    // Update statistics
+    this.statisticsManager.endGame(scoreData.score, finalWave, zombiesKilled, coinsEarned);
+
+    // Update UI elements
+    document.getElementById('finalScore').textContent = scoreData.score.toLocaleString();
+    const bestScoreEl = document.getElementById('bestScoreDisplay');
+    if (bestScoreEl) {
+      bestScoreEl.innerHTML = scoreData.bestScore.toLocaleString();
+      if (wasNewRecord) {
+        const newRecordEl = document.getElementById('newRecord');
+        if (newRecordEl) {
+          newRecordEl.style.display = 'inline';
+        } else {
+          bestScoreEl.innerHTML += ' <span id="newRecord" class="new-record">⭐</span>';
+        }
+      }
+    }
+    document.getElementById('finalWave').textContent = finalWave;
+    document.getElementById('finalKills').textContent = zombiesKilled;
+    document.getElementById('coinsEarned').textContent = `+${Math.max(0, coinsEarned)}`;
+    
+    // Show game over screen
+    if (screenManager) {
+      screenManager.showOverlay('gameOverScreen');
+    }
+  }
+
+  loop() {
+    this.update();
+    this.draw();
+
+    // Phase 3: Continue loop during death animation, stop only after game over screen shows
+    if (!this.controls.isPaused && (!this.gameOver || this.player.dying)) {
+      requestAnimationFrame(() => this.loop());
+    }
+  }
+}
+
+// Global game instance
+let Game;
+
+// Screen management functions
+function startGame() {
+  if (screenManager) {
+    screenManager.showScreen('GAMEPLAY');
+  }
+  // Show pause button
+  const pauseButton = document.querySelector('.pause-button');
+  if (pauseButton) {
+    pauseButton.classList.add('show');
+  }
+  const canvas = document.getElementById('game');
+  Game = new ZombieGame(canvas);
+  Game.reset();
+}
+
+function resumeGame() {
+  if (!Game) return;
+  Game.controls.togglePause();
+  if (screenManager) {
+    screenManager.hideOverlay('pauseScreen');
+  }
+}
+
+function pauseToMainMenu() {
+  if (screenManager) {
+    screenManager.showScreen('MAIN_MENU');
+  }
+  // Hide pause button
+  const pauseButton = document.querySelector('.pause-button');
+  if (pauseButton) {
+    pauseButton.classList.remove('show');
+  }
+  Game = null; // Clean up game instance
+}
+
+function returnToMainMenu() {
+  if (screenManager) {
+    screenManager.showScreen('MAIN_MENU');
+  }
+  // Hide pause button
+  const pauseButton = document.querySelector('.pause-button');
+  if (pauseButton) {
+    pauseButton.classList.remove('show');
+  }
+  Game = null; // Clean up game instance
+  if (typeof updateMenuCoins === 'function') {
+    updateMenuCoins();
+  }
+}
+
+function playAgain() {
+  if (screenManager) {
+    screenManager.showScreen('GAMEPLAY');
+  }
+  // Show pause button
+  const pauseButton = document.querySelector('.pause-button');
+  if (pauseButton) {
+    pauseButton.classList.add('show');
+  }
+  if (!Game) {
+    const canvas = document.getElementById('game');
+    Game = new ZombieGame(canvas);
+  }
+  Game.reset();
+}
+
+// Pause toggle function
+function togglePause() {
+  if (!Game) return;
+  
+  const wasPaused = Game.controls.isPaused;
+  Game.controls.togglePause();
+  
+  if (screenManager) {
+    if (Game.controls.isPaused && !wasPaused) {
+      // Just paused - show pause screen
+      updatePauseStats();
+      screenManager.showOverlay('pauseScreen');
+    } else if (!Game.controls.isPaused && wasPaused) {
+      // Just unpaused - hide pause screen
+      screenManager.hideOverlay('pauseScreen');
+    }
+  }
+}
+
+function updatePauseStats() {
+  if (!Game) return;
+  const scoreData = Game.scoreManager.getData();
+  const boosts = Game.shopManager.getEquippedStatBoosts();
+  const maxHealth = CONFIG.PLAYER.MAX_HEALTH + boosts.maxHealth;
+  
+  document.getElementById('pauseWave').textContent = Game.waveManager.getWave();
+  document.getElementById('pauseScore').textContent = scoreData.score.toLocaleString();
+  const pauseRankEl = document.getElementById('pauseRank');
+  if (pauseRankEl) {
+    pauseRankEl.textContent = scoreData.rank;
+  }
+  document.getElementById('pauseHealth').textContent = 
+    `${Math.floor(Game.player.health)}/${maxHealth}`;
+}
+
+function openShopFromPause() {
+  openShop();
+}
+
+function openInventoryFromPause() {
+  openInventory();
+}
+
+function openShopFromGameOver() {
+  openShop();
+}
+
+function openInventoryFromGameOver() {
+  openInventory();
+}

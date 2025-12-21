@@ -1,0 +1,3591 @@
+// Entity Classes
+
+class Player {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.x = canvas.width / 2;
+    this.y = canvas.height / 2;
+    this.size = CONFIG.PLAYER.SIZE;
+    this.speed = CONFIG.PLAYER.SPEED_NORMAL;
+    this.health = CONFIG.PLAYER.MAX_HEALTH;
+    this.vx = 0;
+    this.vy = 0;
+    this.reloadProgress = 0;
+    this.idleOffset = 0;
+    this.hitFlashTimer = 0;
+    this.motionTrails = [];
+    this.comboGlowTimer = 0;
+    this.multikillTexts = [];
+    this.lastKillTime = 0;
+    this.killStreak = 0;
+    
+    // Phase 3: Death animation
+    this.dying = false;
+    this.deathProgress = 0;
+    this.deathStartY = this.y;
+    this.deathVelocityY = 0;
+    
+    // Phase 3: Spawn animation
+    this.spawnTime = performance.now();
+    this.spawnProgress = 0;
+  }
+
+  update() {
+    // Phase 3: Update spawn animation
+    const now = performance.now();
+    const spawnAge = (now - this.spawnTime) / 300; // 300ms spawn duration
+    if (spawnAge < 1) {
+      this.spawnProgress = Math.min(1, spawnAge * 2 - spawnAge * spawnAge); // Ease-out curve
+    } else {
+      this.spawnProgress = 1;
+    }
+    
+    // Phase 3: Update death animation
+    if (this.dying) {
+      this.deathProgress += 0.03; // ~0.5 seconds at 60fps (30 frames)
+      if (this.deathProgress > 1) {
+        this.deathProgress = 1;
+      }
+      // Apply gravity to fall
+      this.deathVelocityY += 0.5;
+      this.y = this.deathStartY + this.deathVelocityY * this.deathProgress * 10;
+      return; // Don't update movement or other animations during death
+    }
+    
+    this.idleOffset = Math.sin(performance.now() / 300) * 1.5;
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // Keep player in bounds
+    this.x = Math.max(this.size, Math.min(this.canvas.width - this.size, this.x));
+    this.y = Math.max(this.size, Math.min(this.canvas.height - this.size, this.y));
+
+    if (this.reloadProgress > 0) {
+      this.reloadProgress -= 0.05;
+      if (this.reloadProgress < 0) this.reloadProgress = 0;
+    }
+
+    // Update hit flash timer
+    if (this.hitFlashTimer > 0) {
+      this.hitFlashTimer -= 1;
+    }
+
+    // Update combo glow timer
+    if (this.comboGlowTimer > 0) {
+      this.comboGlowTimer -= 1;
+    }
+
+    // Update multikill texts
+    for (let i = this.multikillTexts.length - 1; i >= 0; i--) {
+      const text = this.multikillTexts[i];
+      text.life -= 1;
+      text.y -= 1; // Float up
+      if (text.life <= 0) {
+        this.multikillTexts.splice(i, 1);
+      }
+    }
+
+    // Update motion trails (when moving)
+    const isMoving = Math.abs(this.vx) + Math.abs(this.vy) > 0;
+    if (isMoving) {
+      this.motionTrails.push({
+        x: this.x,
+        y: this.y + this.idleOffset,
+        life: 5,
+        maxLife: 5
+      });
+      // Limit trail count to prevent excessive growth
+      if (this.motionTrails.length > 10) {
+        this.motionTrails.shift();
+      }
+    }
+    // Age and remove old trails
+    for (let i = this.motionTrails.length - 1; i >= 0; i--) {
+      this.motionTrails[i].life -= 1;
+      if (this.motionTrails[i].life <= 0) {
+        this.motionTrails.splice(i, 1);
+      }
+    }
+  }
+  
+  // Phase 3: Start death animation
+  startDeath() {
+    if (!this.dying) {
+      this.dying = true;
+      this.deathProgress = 0;
+      this.deathStartY = this.y;
+      this.deathVelocityY = -2; // Initial upward velocity (then falls)
+      this.vx = 0;
+      this.vy = 0;
+    }
+  }
+  
+  // Phase 3: Check if death animation is complete
+  isDeathComplete() {
+    return this.dying && this.deathProgress >= 1;
+  }
+  
+  // Phase 3: Reset spawn animation (called when player respawns)
+  resetSpawn() {
+    this.spawnTime = performance.now();
+    this.spawnProgress = 0;
+    this.dying = false;
+    this.deathProgress = 0;
+  }
+
+  takeHit() {
+    this.hitFlashTimer = 5; // 5 frames of flash
+  }
+
+  triggerComboGlow() {
+    this.comboGlowTimer = 12; // ~0.2 seconds at 60fps
+  }
+
+  addKill() {
+    const now = Date.now();
+    if (now - this.lastKillTime < 500) {
+      // Kill within 500ms = multikill
+      this.killStreak++;
+      if (this.killStreak >= 3) {
+        // Show multikill indicator
+        this.multikillTexts.push({
+          text: `x${this.killStreak} KILLS`,
+          x: this.x,
+          y: this.y + this.idleOffset - this.size * 2,
+          life: 40,
+          maxLife: 40,
+          scale: 1.0
+        });
+      }
+    } else {
+      this.killStreak = 1;
+    }
+    this.lastKillTime = now;
+  }
+
+  drawMotionTrails(ctx) {
+    // Draw motion trails (semi-transparent player silhouettes)
+    for (let i = 0; i < this.motionTrails.length; i++) {
+      const trail = this.motionTrails[i];
+      const alpha = (trail.life / trail.maxLife) * 0.3;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#666';
+      ctx.beginPath();
+      ctx.arc(trail.x, trail.y, this.size * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  drawSpeedLines(ctx, powerupManager) {
+    // Draw speed lines when speed boost active and moving
+    if (powerupManager && powerupManager.isSpeedActive() && Math.abs(this.vx) + Math.abs(this.vy) > 0) {
+      const moveAngle = Math.atan2(this.vy, this.vx);
+      const backAngle = moveAngle + Math.PI;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,165,0,0.4)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 5; i++) {
+        const offset = (i - 2) * 8;
+        const perpAngle = backAngle + Math.PI / 2;
+        const startX = this.x + Math.cos(backAngle) * this.size * 1.5 + Math.cos(perpAngle) * offset;
+        const startY = this.y + this.idleOffset + Math.sin(backAngle) * this.size * 1.5 + Math.sin(perpAngle) * offset;
+        const endX = startX + Math.cos(backAngle) * 15;
+        const endY = startY + Math.sin(backAngle) * 15;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  drawHitFlash(ctx) {
+    // Draw red flash overlay when hit
+    if (this.hitFlashTimer > 0) {
+      const alpha = (this.hitFlashTimer / 5) * 0.5;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(this.x - this.size * 2, this.y - this.size * 2, this.size * 4, this.size * 4);
+      ctx.restore();
+    }
+  }
+
+  drawComboGlow(ctx) {
+    // Draw combo glow pulse when combo increases
+    if (this.comboGlowTimer > 0) {
+      const alpha = (this.comboGlowTimer / 12) * 0.6;
+      const scale = 1.0 + (1 - this.comboGlowTimer / 12) * 0.3;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffff00';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y + this.idleOffset, this.size * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  drawMultikillTexts(ctx) {
+    // Draw floating multikill indicators
+    for (let i = 0; i < this.multikillTexts.length; i++) {
+      const text = this.multikillTexts[i];
+      const alpha = text.life / text.maxLife;
+      const scale = 0.8 + (1 - alpha) * 0.4; // Scale up as it fades
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffff00';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.font = `bold ${10 * scale}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeText(text.text, text.x, text.y);
+      ctx.fillText(text.text, text.x, text.y);
+      ctx.restore();
+    }
+  }
+  
+  // Phase 3: Draw player shadow
+  drawShadow(ctx) {
+    // During death, shadow stays at original ground position
+    const shadowY = this.dying 
+      ? this.deathStartY + this.size + 3 
+      : this.y + this.size + this.idleOffset + 3;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(this.x, shadowY, this.size * 0.6, this.size * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  draw(ctx, rank, powerupManager = null, armorModel = 'light', maxHealth = CONFIG.PLAYER.MAX_HEALTH) {
+    // Store maxHealth temporarily for helmet drawing
+    this._currentMaxHealth = maxHealth;
+    
+    // Phase 3: Draw shadow (before transforms, only if not dying)
+    if (!this.dying) {
+      this.drawShadow(ctx);
+    }
+    
+    // Phase 3: Apply spawn/death animation transforms
+    ctx.save();
+    
+    // Phase 3: Apply death animation (fade out, shrink, rotate slightly)
+    if (this.dying) {
+      const deathAlpha = 1 - this.deathProgress;
+      const deathScale = 1 - this.deathProgress * 0.3; // Shrink to 70% size
+      const deathRotation = this.deathProgress * Math.PI * 0.1; // Slight rotation
+      
+      ctx.globalAlpha *= deathAlpha;
+      ctx.translate(this.x, this.y + this.idleOffset);
+      ctx.rotate(deathRotation);
+      ctx.scale(deathScale, deathScale);
+      ctx.translate(-this.x, -(this.y + this.idleOffset));
+    }
+    
+    // Phase 3: Apply spawn animation (fade in, scale in)
+    if (this.spawnProgress < 1) {
+      const spawnAlpha = this.spawnProgress;
+      const spawnScale = 0.5 + this.spawnProgress * 0.5; // Scale from 50% to 100%
+      
+      ctx.globalAlpha *= spawnAlpha;
+      ctx.translate(this.x, this.y + this.idleOffset);
+      ctx.scale(spawnScale, spawnScale);
+      ctx.translate(-this.x, -(this.y + this.idleOffset));
+    }
+
+    // Draw motion trails (when moving)
+    this.drawMotionTrails(ctx);
+
+    // Draw speed lines (when sprinting)
+    this.drawSpeedLines(ctx, powerupManager);
+
+    // Draw combo glow (behind player)
+    this.drawComboGlow(ctx);
+
+    // Draw armor based on type
+    switch(armorModel) {
+      case 'heavy':
+        this.drawHeavyArmor(ctx, rank);
+        break;
+      case 'regen':
+        this.drawRegenSuit(ctx, rank);
+        break;
+      case 'stealth':
+        this.drawStealthArmor(ctx, rank);
+        break;
+      case 'combat':
+        this.drawCombatArmor(ctx, rank);
+        break;
+      case 'advanced':
+        this.drawAdvancedArmor(ctx, rank);
+        break;
+      case 'riot':
+        this.drawRiotGear(ctx, rank);
+        break;
+      case 'exo':
+        this.drawExoSuit(ctx, rank);
+        break;
+      case 'leather':
+        this.drawLeatherArmor(ctx, rank);
+        break;
+      case 'kevlar':
+        this.drawKevlarVest(ctx, rank);
+        break;
+      case 'tactical':
+        this.drawTacticalVest(ctx, rank);
+        break;
+      case 'plated':
+        this.drawPlatedArmor(ctx, rank);
+        break;
+      case 'nano':
+        this.drawNanotechSuit(ctx, rank);
+        break;
+      case 'power':
+        this.drawPowerArmor(ctx, rank);
+        break;
+      case 'plasma':
+        this.drawPlasmaArmor(ctx, rank);
+        break;
+      case 'quantum':
+        this.drawQuantumSuit(ctx, rank);
+        break;
+      case 'mesh':
+        this.drawMeshArmor(ctx, rank);
+        break;
+      case 'ceramic':
+        this.drawCeramicArmor(ctx, rank);
+        break;
+      case 'bio':
+        this.drawBioArmor(ctx, rank);
+        break;
+      case 'titan':
+        this.drawTitanArmor(ctx, rank);
+        break;
+      case 'light':
+      default:
+        this.drawLightArmor(ctx, rank);
+        break;
+    }
+
+    // Draw hit flash overlay (after armor)
+    this.drawHitFlash(ctx);
+
+    // Draw multikill texts (on top)
+    this.drawMultikillTexts(ctx);
+    
+    // Phase 3: Restore context after spawn/death animation transforms
+    ctx.restore();
+  }
+
+  drawLightArmor(ctx, rank) {
+    // LEGS (with joints and boots)
+    const legY = this.y + this.size + this.idleOffset;
+    // Left leg
+    ctx.strokeStyle = '#2a5c2a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Left boot
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    // Right leg
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Right boot
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    // TORSO (tactical vest with armor plates)
+    const bodyY = this.y + this.idleOffset;
+    // Main body
+    ctx.fillStyle = '#228b22';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Armor vest (dark green)
+    ctx.fillStyle = '#1a5c1a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.2);
+
+    // Armor plates (3 segments)
+    ctx.fillStyle = '#0a3c0a';
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2 + i * this.size * 0.35, this.size, this.size * 0.3);
+    }
+
+    // Belt
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.2);
+    // Belt buckle
+    ctx.fillStyle = '#888';
+    ctx.fillRect(this.x - this.size * 0.2, bodyY + this.size * 0.7, this.size * 0.4, this.size * 0.2);
+
+    // SHOULDERS (armor pads)
+    ctx.fillStyle = '#1a5c1a';
+    // Left shoulder
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0a3c0a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Right shoulder
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // HEAD (helmet with visor)
+    this.drawHelmet(ctx, bodyY, '#2d5c2d', '#1a3c1a', rank);
+  }
+
+  colorToRgb(color) {
+    // Helper to convert color names to RGB
+    const colors = {
+      '#00ff00': { r: 0, g: 255, b: 0 },
+      '#ffaa00': { r: 255, g: 170, b: 0 },
+      '#ff0000': { r: 255, g: 0, b: 0 },
+      'green': { r: 0, g: 255, b: 0 },
+      'yellow': { r: 255, g: 255, b: 0 },
+      'red': { r: 255, g: 0, b: 0 }
+    };
+    return colors[color] || colors['#00ff00'];
+  }
+
+  drawHelmet(ctx, bodyY, helmetColor, trimColor, rank, maxHealth = null) {
+    // Use stored maxHealth or default
+    if (maxHealth === null) {
+      maxHealth = this._currentMaxHealth || CONFIG.PLAYER.MAX_HEALTH;
+    }
+    const headY = bodyY - this.size;
+    // Helmet
+    ctx.fillStyle = helmetColor;
+    ctx.beginPath();
+    ctx.arc(this.x, headY, this.size * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    // Helmet trim
+    ctx.strokeStyle = trimColor;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Visor (changes color based on health with pulsing at low health)
+    const healthPercent = (this.health / maxHealth) * 100;
+    let visorColor = '#00ff00';
+    let visorAlpha = 1.0;
+
+    if (healthPercent > 60) {
+      visorColor = '#00ff00';
+    } else if (healthPercent > 30) {
+      visorColor = '#ffaa00';
+    } else {
+      visorColor = '#ff0000';
+      // Pulsing effect at low health
+      const pulseTime = performance.now() / 500;
+      visorAlpha = 0.6 + Math.sin(pulseTime) * 0.4; // Pulse between 0.6 and 1.0
+    }
+
+    const rgb = this.colorToRgb(visorColor);
+    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${visorAlpha})`;
+    ctx.fillRect(this.x - this.size * 0.4, headY - this.size * 0.15, this.size * 0.8, this.size * 0.25);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(this.x - this.size * 0.4, headY - this.size * 0.15, this.size * 0.8, this.size * 0.25);
+
+    // Rank badge (larger, more visible)
+    if (rank !== 'Soldier') {
+      ctx.fillStyle = rank === 'Legend' ? '#0ff' : rank === 'Elite' ? '#0f0' : '#ff0';
+      ctx.beginPath();
+      ctx.arc(this.x, headY - this.size * 0.8, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Rank stars
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 8px sans-serif';
+      ctx.textAlign = 'center';
+      const stars = rank === 'Legend' ? '★★★' : rank === 'Elite' ? '★★' : '★';
+      ctx.fillText(stars, this.x, headY - this.size * 0.75);
+    }
+  }
+
+  drawHeavyArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Legs with heavy plating
+    ctx.strokeStyle = '#3a3a3a';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Knee pads
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.3, this.size * 0.4, this.size * 0.3);
+    ctx.fillRect(this.x + this.size * 0.1, legY + this.size * 0.3, this.size * 0.4, this.size * 0.3);
+    // Boots
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Heavy armor body (dark gray/black)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY - this.size * 0.5, this.size * 1.5, this.size * 1.6);
+
+    // Large armor plates (5 segments)
+    ctx.fillStyle = '#1a1a1a';
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3 + i * this.size * 0.28, this.size * 1.2, this.size * 0.25);
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(this.x - this.size * 0.6, bodyY - this.size * 0.3 + i * this.size * 0.28, this.size * 1.2, this.size * 0.25);
+    }
+
+    // Belt
+    ctx.fillStyle = '#444';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY + this.size * 0.75, this.size * 1.5, this.size * 0.25);
+    ctx.fillStyle = '#666';
+    ctx.fillRect(this.x - this.size * 0.2, bodyY + this.size * 0.75, this.size * 0.4, this.size * 0.25);
+
+    // Heavy shoulder pads
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawHelmet(ctx, bodyY, '#1a1a1a', '#444', rank);
+  }
+
+  drawRegenSuit(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Sleek legs
+    ctx.strokeStyle = '#1a5c3a';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Boots
+    ctx.fillStyle = '#0a3a1a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Sleek body suit (green with glowing accents)
+    ctx.fillStyle = '#1a5c3a';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY - this.size * 0.5, this.size * 1.3, this.size * 1.5);
+
+    // Glowing sections (regen effect)
+    ctx.fillStyle = '#00ff88';
+    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2, this.size, this.size * 0.15);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.2, this.size, this.size * 0.15);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.5, this.size, this.size * 0.15);
+
+    // Belt
+    ctx.fillStyle = '#0a3a1a';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY + this.size * 0.7, this.size * 1.3, this.size * 0.2);
+
+    // Shoulders
+    ctx.fillStyle = '#1a5c3a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.75, bodyY - this.size * 0.4, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.75, bodyY - this.size * 0.4, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#1a5c3a', '#0a3a1a', rank);
+  }
+
+  drawStealthArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Dark legs
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Boots
+    ctx.fillStyle = '#000';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Black stealth suit
+    ctx.fillStyle = '#1a1a2a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Dark armor vest
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.2);
+
+    // Subtle armor plates
+    ctx.fillStyle = '#000';
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2 + i * this.size * 0.35, this.size, this.size * 0.3);
+    }
+
+    // Belt
+    ctx.fillStyle = '#2a2a3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.2);
+
+    // Shoulders
+    ctx.fillStyle = '#0a0a1a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#0a0a1a', '#000', rank);
+  }
+
+  drawCombatArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Tactical legs
+    ctx.strokeStyle = '#4a4a4a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Tactical boots
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Combat body (gray tactical)
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Tactical vest (multiple pouches)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.2);
+
+    // Tactical plates (4 segments)
+    ctx.fillStyle = '#1a1a1a';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2 + i * this.size * 0.3, this.size, this.size * 0.25);
+      ctx.strokeStyle = '#555';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(this.x - this.size * 0.5, bodyY - this.size * 0.2 + i * this.size * 0.3, this.size, this.size * 0.25);
+    }
+
+    // Tactical belt with pouches
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.25);
+    // Pouches
+    ctx.fillStyle = '#2a2a2a';
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(this.x - this.size * 0.6 + i * this.size * 0.4, bodyY + this.size * 0.7, this.size * 0.3, this.size * 0.25);
+    }
+
+    // Tactical shoulders
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawHelmet(ctx, bodyY, '#2a2a2a', '#555', rank);
+  }
+
+  drawAdvancedArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Futuristic legs
+    ctx.strokeStyle = '#2a4a6a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Glowing sections on legs (animated pulse)
+    const now = performance.now();
+    const pulseAlpha = 0.6 + Math.sin(now * 0.003) * 0.4;
+    ctx.fillStyle = `rgba(0,255,255,${pulseAlpha})`;
+    ctx.fillRect(this.x - this.size * 0.35, legY + this.size * 0.2, this.size * 0.1, this.size * 0.2);
+    ctx.fillRect(this.x + this.size * 0.25, legY + this.size * 0.2, this.size * 0.1, this.size * 0.2);
+    // Advanced boots
+    ctx.fillStyle = '#1a2a4a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Advanced armor body (blue tech)
+    ctx.fillStyle = '#2a4a6a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Tech panels (glowing)
+    ctx.fillStyle = '#1a2a4a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.2);
+
+    // Glowing tech lines (animated pulse)
+    ctx.fillStyle = `rgba(0,255,255,${pulseAlpha})`;
+    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2, this.size, this.size * 0.05);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.05, this.size, this.size * 0.05);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.3, this.size, this.size * 0.05);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.55, this.size, this.size * 0.05);
+
+    // Tech belt
+    ctx.fillStyle = '#1a2a4a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.25);
+    // Tech core (glowing, animated pulse)
+    ctx.fillStyle = `rgba(0,255,255,${pulseAlpha})`;
+    ctx.fillRect(this.x - this.size * 0.15, bodyY + this.size * 0.72, this.size * 0.3, this.size * 0.2);
+
+    // Tech shoulders (glowing)
+    ctx.fillStyle = '#2a4a6a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(0,255,255,${pulseAlpha})`;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(0,255,255,${pulseAlpha})`;
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#2a4a6a', '#1a2a4a', rank);
+  }
+
+  drawRiotGear(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Riot legs
+    ctx.strokeStyle = '#5a5a5a';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Shin guards
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.4, this.size * 0.4, this.size * 0.3);
+    ctx.fillRect(this.x + this.size * 0.1, legY + this.size * 0.4, this.size * 0.4, this.size * 0.3);
+    // Riot boots
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Riot armor body
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY - this.size * 0.5, this.size * 1.5, this.size * 1.6);
+
+    // Riot plates (overlapping)
+    ctx.fillStyle = '#3a3a3a';
+    for (let i = 0; i < 4; i++) {
+      const offset = i % 2 === 0 ? -this.size * 0.1 : this.size * 0.1;
+      ctx.fillRect(this.x - this.size * 0.6 + offset, bodyY - this.size * 0.3 + i * this.size * 0.35, this.size * 1.2, this.size * 0.3);
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.x - this.size * 0.6 + offset, bodyY - this.size * 0.3 + i * this.size * 0.35, this.size * 1.2, this.size * 0.3);
+    }
+
+    // Heavy belt
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY + this.size * 0.75, this.size * 1.5, this.size * 0.3);
+
+    // Riot shoulder pads (large)
+    ctx.fillStyle = '#3a3a3a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.95, bodyY - this.size * 0.4, this.size * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.95, bodyY - this.size * 0.4, this.size * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawHelmet(ctx, bodyY, '#3a3a3a', '#666', rank);
+  }
+
+  drawExoSuit(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Exo legs (mechanical)
+    ctx.strokeStyle = '#6a6a6a';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Joints (glowing)
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.3, legY + this.size * 0.35, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.3, legY + this.size * 0.35, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    // Exo boots
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Exo body (mechanical)
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(this.x - this.size * 0.8, bodyY - this.size * 0.5, this.size * 1.6, this.size * 1.7);
+
+    // Exo frame
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY - this.size * 0.3, this.size * 1.3, this.size * 1.4);
+
+    // Mechanical plates
+    ctx.fillStyle = '#3a3a3a';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(this.x - this.size * 0.55, bodyY - this.size * 0.2 + i * this.size * 0.32, this.size * 1.1, this.size * 0.28);
+      ctx.strokeStyle = '#ff6600';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.x - this.size * 0.55, bodyY - this.size * 0.2 + i * this.size * 0.32, this.size * 1.1, this.size * 0.28);
+    }
+
+    // Power core (glowing orange)
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.2, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffaa00';
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.2, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Exo belt
+    ctx.fillStyle = '#6a6a6a';
+    ctx.fillRect(this.x - this.size * 0.8, bodyY + this.size * 0.8, this.size * 1.6, this.size * 0.3);
+
+    // Exo shoulders (large with joints)
+    ctx.fillStyle = '#5a5a5a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 1.0, bodyY - this.size * 0.4, this.size * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 1.0, bodyY - this.size * 0.4, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 1.0, bodyY - this.size * 0.4, this.size * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 1.0, bodyY - this.size * 0.4, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#5a5a5a', '#4a4a4a', rank);
+  }
+
+  drawLeatherArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Simple legs
+    ctx.strokeStyle = '#6a4a2a';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Boots
+    ctx.fillStyle = '#4a2a1a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Leather body (brown)
+    ctx.fillStyle = '#8b5a2b';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY - this.size * 0.5, this.size * 1.3, this.size * 1.5);
+
+    // Simple leather vest
+    ctx.fillStyle = '#6a4a2a';
+    ctx.fillRect(this.x - this.size * 0.55, bodyY - this.size * 0.3, this.size * 1.1, this.size * 1.1);
+
+    // Stitching
+    ctx.strokeStyle = '#4a2a1a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.4, bodyY);
+    ctx.lineTo(this.x + this.size * 0.4, bodyY);
+    ctx.stroke();
+
+    // Belt
+    ctx.fillStyle = '#5a3a1a';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY + this.size * 0.7, this.size * 1.3, this.size * 0.15);
+
+    // Shoulders
+    ctx.fillStyle = '#6a4a2a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.75, bodyY - this.size * 0.4, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.75, bodyY - this.size * 0.4, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#6a4a2a', '#4a2a1a', rank);
+  }
+
+  drawKevlarVest(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Standard legs
+    ctx.strokeStyle = '#4a4a4a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Boots
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Body
+    ctx.fillStyle = '#3a4a3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Kevlar vest (dark gray/black)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.0);
+
+    // Armor panels (2 segments)
+    ctx.fillStyle = '#1a1a1a';
+    for (let i = 0; i < 2; i++) {
+      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.15 + i * this.size * 0.4, this.size, this.size * 0.3);
+    }
+
+    // Belt
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.2);
+
+    // Shoulders
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#2a2a2a', '#1a1a1a', rank);
+  }
+
+  drawTacticalVest(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Tactical legs
+    ctx.strokeStyle = '#5a5a4a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Boots
+    ctx.fillStyle = '#3a3a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Body
+    ctx.fillStyle = '#4a4a3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Tactical vest (olive drab)
+    ctx.fillStyle = '#3a4a2a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.1);
+
+    // Tactical plates (3 segments)
+    ctx.fillStyle = '#2a3a1a';
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2 + i * this.size * 0.3, this.size, this.size * 0.25);
+    }
+
+    // Belt with pouches
+    ctx.fillStyle = '#4a4a3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.2);
+
+    // Shoulders
+    ctx.fillStyle = '#3a4a2a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#3a4a2a', '#2a3a1a', rank);
+  }
+
+  drawPlatedArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Plated legs
+    ctx.strokeStyle = '#5a5a5a';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Plate armor on legs
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.2, this.size * 0.4, this.size * 0.3);
+    ctx.fillRect(this.x + this.size * 0.1, legY + this.size * 0.2, this.size * 0.4, this.size * 0.3);
+    // Boots
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Plated body
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.6);
+
+    // Large metal plates (4 segments)
+    ctx.fillStyle = '#3a3a3a';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(this.x - this.size * 0.55, bodyY - this.size * 0.3 + i * this.size * 0.32, this.size * 1.1, this.size * 0.28);
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(this.x - this.size * 0.55, bodyY - this.size * 0.3 + i * this.size * 0.32, this.size * 1.1, this.size * 0.28);
+    }
+
+    // Belt
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.75, this.size * 1.4, this.size * 0.25);
+
+    // Plated shoulders
+    ctx.fillStyle = '#3a3a3a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawHelmet(ctx, bodyY, '#3a3a3a', '#666', rank);
+  }
+
+  drawNanotechSuit(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Nano legs (sleek, tech)
+    ctx.strokeStyle = '#2a4a5a';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Nano patterns (glowing, animated pulse)
+    const now = performance.now();
+    const pulseAlpha = 0.6 + Math.sin(now * 0.003) * 0.4;
+    ctx.fillStyle = `rgba(0,170,204,${pulseAlpha})`;
+    ctx.fillRect(this.x - this.size * 0.35, legY + this.size * 0.25, this.size * 0.1, this.size * 0.15);
+    ctx.fillRect(this.x + this.size * 0.25, legY + this.size * 0.25, this.size * 0.1, this.size * 0.15);
+    // Boots
+    ctx.fillStyle = '#1a3a4a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Nanotech body
+    ctx.fillStyle = '#2a4a5a';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY - this.size * 0.5, this.size * 1.3, this.size * 1.5);
+
+    // Nano mesh (glowing pattern)
+    ctx.fillStyle = '#1a3a4a';
+    ctx.fillRect(this.x - this.size * 0.55, bodyY - this.size * 0.3, this.size * 1.1, this.size * 1.1);
+
+    // Nano cells (glowing dots, animated pulse) - reuse 'now' from line 1167
+    const pulseAlpha2 = 0.6 + Math.sin(now * 0.003) * 0.4;
+    ctx.fillStyle = `rgba(0,204,255,${pulseAlpha2})`;
+    for (let i = 0; i < 6; i++) {
+      const x = this.x - this.size * 0.4 + (i % 3) * this.size * 0.4;
+      const y = bodyY - this.size * 0.15 + Math.floor(i / 3) * this.size * 0.4;
+      ctx.beginPath();
+      ctx.arc(x, y, this.size * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Belt
+    ctx.fillStyle = '#1a3a4a';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY + this.size * 0.7, this.size * 1.3, this.size * 0.2);
+
+    // Shoulders
+    ctx.fillStyle = '#2a4a5a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.75, bodyY - this.size * 0.4, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.75, bodyY - this.size * 0.4, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#2a4a5a', '#1a3a4a', rank);
+  }
+
+  drawPowerArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Power armor legs (massive)
+    ctx.strokeStyle = '#6a6a6a';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Reinforced plating
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(this.x - this.size * 0.55, legY + this.size * 0.15, this.size * 0.5, this.size * 0.4);
+    ctx.fillRect(this.x + this.size * 0.05, legY + this.size * 0.15, this.size * 0.5, this.size * 0.4);
+    // Heavy boots
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.35);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.35);
+
+    const bodyY = this.y + this.idleOffset;
+    // Power armor body (huge, bulky)
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(this.x - this.size * 0.85, bodyY - this.size * 0.5, this.size * 1.7, this.size * 1.8);
+
+    // Heavy armor plates (6 segments)
+    ctx.fillStyle = '#4a4a4a';
+    for (let i = 0; i < 6; i++) {
+      ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.35 + i * this.size * 0.26, this.size * 1.4, this.size * 0.24);
+      ctx.strokeStyle = '#777';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.x - this.size * 0.7, bodyY - this.size * 0.35 + i * this.size * 0.26, this.size * 1.4, this.size * 0.24);
+    }
+
+    // Power core (glowing, animated pulse)
+    const now = performance.now();
+    const pulseAlpha = 0.7 + Math.sin(now * 0.004) * 0.3;
+    const coreSize = this.size * 0.2 * (0.9 + Math.sin(now * 0.004) * 0.1);
+    ctx.fillStyle = `rgba(255,102,0,${pulseAlpha})`;
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.15, coreSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Heavy belt
+    ctx.fillStyle = '#6a6a6a';
+    ctx.fillRect(this.x - this.size * 0.85, bodyY + this.size * 0.85, this.size * 1.7, this.size * 0.3);
+
+    // Massive power shoulders
+    ctx.fillStyle = '#4a4a4a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 1.05, bodyY - this.size * 0.4, this.size * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#777';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 1.05, bodyY - this.size * 0.4, this.size * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawHelmet(ctx, bodyY, '#4a4a4a', '#777', rank);
+  }
+
+  drawPlasmaArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Plasma legs (energy)
+    ctx.strokeStyle = '#3a4a6a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Energy lines (animated pulse)
+    const now = performance.now();
+    const pulseAlpha = 0.6 + Math.sin(now * 0.003) * 0.4;
+    ctx.fillStyle = `rgba(0,153,255,${pulseAlpha})`;
+    ctx.fillRect(this.x - this.size * 0.35, legY + this.size * 0.3, this.size * 0.1, this.size * 0.2);
+    ctx.fillRect(this.x + this.size * 0.25, legY + this.size * 0.3, this.size * 0.1, this.size * 0.2);
+    // Boots
+    ctx.fillStyle = '#2a3a5a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Plasma body
+    ctx.fillStyle = '#3a4a6a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Plasma panels (glowing)
+    ctx.fillStyle = '#2a3a5a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.2);
+
+    // Energy conduits (glowing blue lines, animated pulse) - reuse 'now' from line 1295
+    const pulseAlpha2 = 0.6 + Math.sin(now * 0.003) * 0.4;
+    ctx.fillStyle = `rgba(0,153,255,${pulseAlpha2})`;
+    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2, this.size, this.size * 0.04);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.1, this.size, this.size * 0.04);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.4, this.size, this.size * 0.04);
+
+    // Plasma core (animated pulse)
+    ctx.fillStyle = `rgba(0,204,255,${pulseAlpha2})`;
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.25, this.size * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Belt
+    ctx.fillStyle = '#2a3a5a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.25);
+
+    // Plasma shoulders (glowing, animated pulse)
+    ctx.fillStyle = '#3a4a6a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(0,153,255,${pulseAlpha2})`;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(0,153,255,${pulseAlpha2})`;
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#3a4a6a', '#2a3a5a', rank);
+  }
+
+  drawQuantumSuit(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Quantum legs (glowing, futuristic)
+    ctx.strokeStyle = '#4a2a6a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Quantum patterns (pulsing purple)
+    const pulse = Math.sin(performance.now() / 300) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(150,0,255,${pulse})`;
+    ctx.fillRect(this.x - this.size * 0.35, legY + this.size * 0.2, this.size * 0.1, this.size * 0.25);
+    ctx.fillRect(this.x + this.size * 0.25, legY + this.size * 0.2, this.size * 0.1, this.size * 0.25);
+    // Boots
+    ctx.fillStyle = '#3a1a5a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Quantum body
+    ctx.fillStyle = '#4a2a6a';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY - this.size * 0.5, this.size * 1.5, this.size * 1.6);
+
+    // Quantum mesh (glowing purple)
+    ctx.fillStyle = '#3a1a5a';
+    ctx.fillRect(this.x - this.size * 0.65, bodyY - this.size * 0.3, this.size * 1.3, this.size * 1.3);
+
+    // Quantum energy lines (glowing)
+    ctx.fillStyle = `rgba(200,0,255,${pulse})`;
+    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2, this.size, this.size * 0.05);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.05, this.size, this.size * 0.05);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.3, this.size, this.size * 0.05);
+    ctx.fillRect(this.x - this.size * 0.5, bodyY + this.size * 0.55, this.size, this.size * 0.05);
+
+    // Quantum core (pulsing)
+    ctx.fillStyle = `rgba(255,0,255,${pulse})`;
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.2, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff00ff';
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.2, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Belt
+    ctx.fillStyle = '#3a1a5a';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY + this.size * 0.75, this.size * 1.5, this.size * 0.3);
+
+    // Quantum shoulders (glowing)
+    ctx.fillStyle = '#4a2a6a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(200,0,255,${pulse})`;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(200,0,255,${pulse})`;
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#4a2a6a', '#3a1a5a', rank);
+  }
+
+  drawMeshArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Mesh legs (flexible)
+    ctx.strokeStyle = '#5a5a4a';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Boots
+    ctx.fillStyle = '#3a3a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Mesh body (flexible fabric)
+    ctx.fillStyle = '#4a4a3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Mesh vest (flexible)
+    ctx.fillStyle = '#3a3a2a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.1);
+
+    // Mesh pattern (small grid)
+    ctx.strokeStyle = '#2a2a1a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        ctx.strokeRect(this.x - this.size * 0.5 + i * this.size * 0.3, bodyY - this.size * 0.2 + j * this.size * 0.3, this.size * 0.25, this.size * 0.25);
+      }
+    }
+
+    // Belt
+    ctx.fillStyle = '#5a5a4a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.2);
+
+    // Shoulders
+    ctx.fillStyle = '#3a3a2a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#3a3a2a', '#2a2a1a', rank);
+  }
+
+  drawCeramicArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Ceramic legs
+    ctx.strokeStyle = '#6a6a6a';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Ceramic plates on legs
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.15, this.size * 0.4, this.size * 0.35);
+    ctx.fillRect(this.x + this.size * 0.1, legY + this.size * 0.15, this.size * 0.4, this.size * 0.35);
+    // Boots
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Ceramic body
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY - this.size * 0.5, this.size * 1.5, this.size * 1.6);
+
+    // Large ceramic plates (5 segments)
+    ctx.fillStyle = '#4a4a4a';
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3 + i * this.size * 0.28, this.size * 1.2, this.size * 0.26);
+      ctx.strokeStyle = '#777';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(this.x - this.size * 0.6, bodyY - this.size * 0.3 + i * this.size * 0.28, this.size * 1.2, this.size * 0.26);
+    }
+
+    // Belt
+    ctx.fillStyle = '#6a6a6a';
+    ctx.fillRect(this.x - this.size * 0.75, bodyY + this.size * 0.75, this.size * 1.5, this.size * 0.25);
+
+    // Ceramic shoulders
+    ctx.fillStyle = '#4a4a4a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#777';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.9, bodyY - this.size * 0.4, this.size * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawHelmet(ctx, bodyY, '#4a4a4a', '#777', rank);
+  }
+
+  drawBioArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Bio legs (organic)
+    ctx.strokeStyle = '#3a5c3a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Bio nodes (glowing)
+    ctx.fillStyle = '#00ff88';
+    ctx.fillRect(this.x - this.size * 0.35, legY + this.size * 0.3, this.size * 0.1, this.size * 0.15);
+    ctx.fillRect(this.x + this.size * 0.25, legY + this.size * 0.3, this.size * 0.1, this.size * 0.15);
+    // Boots
+    ctx.fillStyle = '#2a4a2a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
+
+    const bodyY = this.y + this.idleOffset;
+    // Bio body
+    ctx.fillStyle = '#3a5c3a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
+
+    // Bio panels (organic)
+    ctx.fillStyle = '#2a4a2a';
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.2);
+
+    // Bio nodes (glowing green)
+    ctx.fillStyle = '#00ff88';
+    for (let i = 0; i < 6; i++) {
+      const x = this.x - this.size * 0.4 + (i % 3) * this.size * 0.4;
+      const y = bodyY - this.size * 0.15 + Math.floor(i / 3) * this.size * 0.4;
+      ctx.beginPath();
+      ctx.arc(x, y, this.size * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Belt
+    ctx.fillStyle = '#2a4a2a';
+    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.25);
+
+    // Shoulders
+    ctx.fillStyle = '#3a5c3a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.85, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.drawHelmet(ctx, bodyY, '#3a5c3a', '#2a4a2a', rank);
+  }
+
+  drawTitanArmor(ctx, rank) {
+    const legY = this.y + this.size + this.idleOffset;
+    // Titan legs (massive)
+    ctx.strokeStyle = '#7a7a7a';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, legY);
+    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, legY);
+    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
+    ctx.stroke();
+    // Massive leg plating
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(this.x - this.size * 0.6, legY + this.size * 0.1, this.size * 0.6, this.size * 0.5);
+    ctx.fillRect(this.x, legY + this.size * 0.1, this.size * 0.6, this.size * 0.5);
+    // Heavy boots
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.35);
+    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.35);
+
+    const bodyY = this.y + this.idleOffset;
+    // Titan body (huge, ultimate)
+    ctx.fillStyle = '#6a6a6a';
+    ctx.fillRect(this.x - this.size * 0.9, bodyY - this.size * 0.5, this.size * 1.8, this.size * 1.9);
+
+    // Massive armor plates (7 segments)
+    ctx.fillStyle = '#5a5a5a';
+    for (let i = 0; i < 7; i++) {
+      ctx.fillRect(this.x - this.size * 0.75, bodyY - this.size * 0.35 + i * this.size * 0.24, this.size * 1.5, this.size * 0.22);
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.x - this.size * 0.75, bodyY - this.size * 0.35 + i * this.size * 0.24, this.size * 1.5, this.size * 0.22);
+    }
+
+    // Titan core
+    ctx.fillStyle = '#ffaa00';
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.1, this.size * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Heavy belt
+    ctx.fillStyle = '#7a7a7a';
+    ctx.fillRect(this.x - this.size * 0.9, bodyY + this.size * 0.9, this.size * 1.8, this.size * 0.3);
+
+    // Massive titan shoulders
+    ctx.fillStyle = '#5a5a5a';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 1.1, bodyY - this.size * 0.4, this.size * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 1.1, bodyY - this.size * 0.4, this.size * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawHelmet(ctx, bodyY, '#5a5a5a', '#888', rank);
+  }
+
+  drawWeaponGlow(ctx, weaponModel, gunLength) {
+    // Draw weapon-specific glow effects
+    const now = performance.now();
+    const pulseTime = now * 0.005;
+    const pulse = 0.5 + Math.sin(pulseTime) * 0.3;
+
+    switch(weaponModel) {
+      case 'laser':
+        // Laser weapon glow - pulsing cyan
+        ctx.save();
+        ctx.globalAlpha = pulse * 0.4;
+        const laserGradient = ctx.createRadialGradient(gunLength * 0.7, 0, 0, gunLength * 0.7, 0, this.size * 1.5);
+        laserGradient.addColorStop(0, 'rgba(0,255,255,0.8)');
+        laserGradient.addColorStop(1, 'rgba(0,255,255,0)');
+        ctx.fillStyle = laserGradient;
+        ctx.beginPath();
+        ctx.arc(gunLength * 0.7, 0, this.size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        break;
+      case 'plasma_rifle':
+        // Plasma weapon glow - pulsing blue
+        ctx.save();
+        ctx.globalAlpha = pulse * 0.5;
+        const plasmaGradient = ctx.createRadialGradient(gunLength * 0.6, 0, 0, gunLength * 0.6, 0, this.size * 1.8);
+        plasmaGradient.addColorStop(0, 'rgba(0,150,255,0.8)');
+        plasmaGradient.addColorStop(1, 'rgba(0,150,255,0)');
+        ctx.fillStyle = plasmaGradient;
+        ctx.beginPath();
+        ctx.arc(gunLength * 0.6, 0, this.size * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        break;
+      case 'quantum_rifle':
+        // Quantum weapon glow - pulsing purple
+        ctx.save();
+        ctx.globalAlpha = pulse * 0.4;
+        const quantumGradient = ctx.createRadialGradient(gunLength * 0.7, 0, 0, gunLength * 0.7, 0, this.size * 2.0);
+        quantumGradient.addColorStop(0, 'rgba(150,0,255,0.8)');
+        quantumGradient.addColorStop(0.5, 'rgba(100,0,200,0.5)');
+        quantumGradient.addColorStop(1, 'rgba(150,0,255,0)');
+        ctx.fillStyle = quantumGradient;
+        ctx.beginPath();
+        ctx.arc(gunLength * 0.7, 0, this.size * 2.0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        break;
+      case 'tesla_cannon':
+        // Tesla weapon glow - electric sparks effect
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = 'rgba(0,200,255,0.8)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) {
+          const sparkAngle = (now * 0.01 + i * Math.PI / 3) % (Math.PI * 2);
+          const sparkX = gunLength * 0.6 + Math.cos(sparkAngle) * this.size * 0.3;
+          const sparkY = Math.sin(sparkAngle) * this.size * 0.3;
+          const endX = sparkX + Math.cos(sparkAngle) * this.size * 0.8;
+          const endY = sparkY + Math.sin(sparkAngle) * this.size * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(sparkX, sparkY);
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+    }
+  }
+
+  drawArm(ctx, target, weaponModel = 'assault_rifle') {
+    let aimAngle = 0;
+    if (target) {
+      const dx = target.x - this.x;
+      const dy = target.y - this.y;
+      aimAngle = Math.atan2(dy, dx);
+    }
+
+    const swing = Math.sin(performance.now() / 300) * 0.05;
+    // Enhanced reload animation - weapon pulls back more
+    const reloadPull = Math.max(0, this.reloadProgress * 1.2);
+    const recoilOffset = reloadPull;
+    const animatedAngle = aimAngle + swing - recoilOffset;
+
+    ctx.save();
+    ctx.translate(this.x, this.y + this.idleOffset);
+    ctx.rotate(animatedAngle);
+
+    // Draw weapon glow effect (behind weapon) for special weapons
+    const gunLength = this.size * 2.5; // Default, will be adjusted per weapon
+    const specialWeapons = ['laser', 'plasma_rifle', 'quantum_rifle', 'tesla_cannon'];
+    if (specialWeapons.includes(weaponModel)) {
+      this.drawWeaponGlow(ctx, weaponModel, gunLength);
+    }
+
+    // Draw weapon based on type
+    switch(weaponModel) {
+      case 'pistol':
+        this.drawPistol(ctx);
+        break;
+      case 'shotgun':
+        this.drawShotgun(ctx);
+        break;
+      case 'heavy_cannon':
+        this.drawHeavyCannon(ctx);
+        break;
+      case 'sniper':
+        this.drawSniper(ctx);
+        break;
+      case 'rocket_launcher':
+        this.drawRocketLauncher(ctx);
+        break;
+      case 'laser':
+        this.drawLaserRifle(ctx);
+        break;
+      case 'dual_pistols':
+        this.drawDualPistols(ctx);
+        break;
+      case 'smg':
+        this.drawSMG(ctx);
+        break;
+      case 'burst_rifle':
+        this.drawBurstRifle(ctx);
+        break;
+      case 'plasma_rifle':
+        this.drawPlasmaRifle(ctx);
+        break;
+      case 'crossbow':
+        this.drawCrossbow(ctx);
+        break;
+      case 'minigun':
+        this.drawMinigun(ctx);
+        break;
+      case 'railgun':
+        this.drawRailgun(ctx);
+        break;
+      case 'flamethrower':
+        this.drawFlamethrower(ctx);
+        break;
+      case 'chain_gun':
+        this.drawChainGun(ctx);
+        break;
+      case 'quantum_rifle':
+        this.drawQuantumRifle(ctx);
+        break;
+      case 'tesla_cannon':
+        this.drawTeslaCannon(ctx);
+        break;
+      case 'assault_rifle':
+      default:
+        this.drawAssaultRifle(ctx);
+        break;
+    }
+
+    ctx.restore();
+
+    // ARMS holding gun
+    const bodyY = this.y + this.idleOffset;
+
+    // Right arm (shooting arm)
+    ctx.strokeStyle = '#2a5c2a';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const rightArmX = this.x + Math.cos(animatedAngle) * this.size * 0.8;
+    const rightArmY = bodyY + Math.sin(animatedAngle) * this.size * 0.8;
+    ctx.moveTo(this.x + this.size * 0.7, bodyY - this.size * 0.3);
+    ctx.lineTo(rightArmX, rightArmY);
+    ctx.stroke();
+
+    // Right hand/glove
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.arc(rightArmX, rightArmY, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Left arm (supporting arm)
+    ctx.strokeStyle = '#2a5c2a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    const leftArmX = this.x + Math.cos(animatedAngle) * this.size * 1.5;
+    const leftArmY = bodyY + Math.sin(animatedAngle) * this.size * 1.5;
+    ctx.moveTo(this.x - this.size * 0.7, bodyY - this.size * 0.3);
+    ctx.lineTo(leftArmX, leftArmY);
+    ctx.stroke();
+
+    // Left hand/glove
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.arc(leftArmX, leftArmY, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawAssaultRifle(ctx) {
+    const gunLength = this.size * 2.5;
+    const gunHeight = this.size * 0.4;
+
+    // Stock (back of gun)
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.4, this.size * 0.6, gunHeight * 0.8);
+
+    // Receiver (main body)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.5, this.size * 1.5, gunHeight);
+
+    // Upper receiver detail
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, -gunHeight * 0.6, this.size * 1.2, gunHeight * 0.3);
+
+    // Magazine (bottom)
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.size * 0.3, gunHeight * 0.2, this.size * 0.4, this.size * 0.8);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(this.size * 0.3, gunHeight * 0.2, this.size * 0.4, this.size * 0.8);
+
+    // Trigger guard
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(this.size * 0.2, gunHeight * 0.2, gunHeight * 0.4, 0, Math.PI);
+    ctx.stroke();
+
+    // Barrel (long front part)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 1.2, -gunHeight * 0.25, gunLength - this.size * 1.2, gunHeight * 0.5);
+
+    // Barrel rifling (muzzle)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(gunLength - this.size * 0.1, -gunHeight * 0.2, this.size * 0.1, gunHeight * 0.4);
+
+    // Scope/sight (on top)
+    ctx.fillStyle = '#444';
+    ctx.fillRect(this.size * 0.7, -gunHeight * 0.8, this.size * 0.5, gunHeight * 0.3);
+    // Scope lens (glowing)
+    ctx.fillStyle = '#0ff';
+    ctx.fillRect(this.size * 0.75, -gunHeight * 0.75, this.size * 0.15, gunHeight * 0.2);
+
+    // Foregrip
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.size * 1.5, gunHeight * 0.3, this.size * 0.3, this.size * 0.5);
+
+    // Tactical rail details (3 slots)
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(this.size * 0.5 + i * this.size * 0.4, -gunHeight * 0.6);
+      ctx.lineTo(this.size * 0.5 + i * this.size * 0.4, -gunHeight * 0.7);
+      ctx.stroke();
+    }
+
+    // Enhanced muzzle flash (when reloading)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2;
+      // Bright yellow core
+      ctx.fillStyle = 'rgba(255,255,100,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Orange outer
+      ctx.fillStyle = 'rgba(255,150,0,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+      // Red outer glow
+      ctx.fillStyle = 'rgba(255,50,0,0.4)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawPistol(ctx) {
+    const gunLength = this.size * 1.2;
+    const gunHeight = this.size * 0.3;
+
+    // Grip (handle)
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(-this.size * 0.3, gunHeight * 0.3, this.size * 0.5, this.size * 0.6);
+
+    // Frame (main body)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.3, this.size * 0.9, gunHeight * 0.6);
+
+    // Barrel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 0.7, -gunHeight * 0.2, gunLength - this.size * 0.7, gunHeight * 0.4);
+
+    // Muzzle
+    ctx.fillStyle = '#000';
+    ctx.fillRect(gunLength - this.size * 0.1, -gunHeight * 0.15, this.size * 0.1, gunHeight * 0.3);
+
+    // Trigger guard
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(this.size * 0.1, gunHeight * 0.3, gunHeight * 0.3, 0, Math.PI);
+    ctx.stroke();
+
+    // Muzzle flash
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 1.2;
+      ctx.fillStyle = 'rgba(255,255,100,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,150,0,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawShotgun(ctx) {
+    const gunLength = this.size * 2.2;
+    const gunHeight = this.size * 0.5;
+
+    // Stock (pump-action style)
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(-this.size * 0.6, -gunHeight * 0.4, this.size * 0.8, gunHeight * 0.8);
+
+    // Receiver (wider body)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.5, this.size * 1.2, gunHeight);
+
+    // Pump handle
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(this.size * 0.8, -gunHeight * 0.3, this.size * 0.4, gunHeight * 0.6);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(this.size * 0.8, -gunHeight * 0.3, this.size * 0.4, gunHeight * 0.6);
+
+    // Barrel (thick, short)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 1.0, -gunHeight * 0.35, gunLength - this.size * 1.0, gunHeight * 0.7);
+
+    // Double barrel opening
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(gunLength, -gunHeight * 0.15, gunHeight * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(gunLength, gunHeight * 0.15, gunHeight * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Muzzle flash (bigger)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2.5;
+      ctx.fillStyle = 'rgba(255,255,100,0.9)';
+    ctx.beginPath();
+      ctx.arc(gunLength, -gunHeight * 0.15, flashSize * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(gunLength, gunHeight * 0.15, flashSize * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,150,0,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawHeavyCannon(ctx) {
+    const gunLength = this.size * 3.0;
+    const gunHeight = this.size * 0.5;
+
+    // Heavy stock
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fillRect(-this.size * 0.7, -gunHeight * 0.5, this.size * 0.8, gunHeight);
+
+    // Large receiver
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.3, -gunHeight * 0.6, this.size * 1.8, gunHeight * 1.2);
+
+    // Barrel (very long and thick)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 1.5, -gunHeight * 0.4, gunLength - this.size * 1.5, gunHeight * 0.8);
+
+    // Barrel details (ridges)
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(this.size * 1.8 + i * this.size * 0.4, -gunHeight * 0.4);
+      ctx.lineTo(this.size * 1.8 + i * this.size * 0.4, gunHeight * 0.4);
+    ctx.stroke();
+    }
+
+    // Large muzzle
+    ctx.fillStyle = '#000';
+    ctx.fillRect(gunLength - this.size * 0.15, -gunHeight * 0.3, this.size * 0.15, gunHeight * 0.6);
+
+    // Muzzle flash (very large)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 3;
+      ctx.fillStyle = 'rgba(255,200,100,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,100,0,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(200,50,0,0.4)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawSniper(ctx) {
+    const gunLength = this.size * 3.5;
+    const gunHeight = this.size * 0.35;
+
+    // Stock (sniper style)
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(-this.size * 0.7, -gunHeight * 0.4, this.size * 0.9, gunHeight * 0.8);
+
+    // Receiver
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.5, this.size * 1.2, gunHeight);
+
+    // Long barrel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 1.0, -gunHeight * 0.3, gunLength - this.size * 1.0, gunHeight * 0.6);
+
+    // Large scope (sniper scope)
+    ctx.fillStyle = '#444';
+    ctx.fillRect(this.size * 0.5, -gunHeight * 1.2, this.size * 0.8, gunHeight * 0.6);
+    // Scope lens (glowing)
+    ctx.fillStyle = '#0ff';
+    ctx.beginPath();
+    ctx.arc(this.size * 0.9, -gunHeight * 0.9, gunHeight * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0aa';
+    ctx.beginPath();
+    ctx.arc(this.size * 0.9, -gunHeight * 0.9, gunHeight * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bipod (front support)
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(this.size * 2.5, -gunHeight * 0.4);
+    ctx.lineTo(this.size * 2.7, -gunHeight * 0.6);
+    ctx.lineTo(this.size * 2.9, -gunHeight * 0.4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.size * 2.5, gunHeight * 0.4);
+    ctx.lineTo(this.size * 2.7, gunHeight * 0.6);
+    ctx.lineTo(this.size * 2.9, gunHeight * 0.4);
+    ctx.stroke();
+
+    // Muzzle
+    ctx.fillStyle = '#000';
+    ctx.fillRect(gunLength - this.size * 0.1, -gunHeight * 0.2, this.size * 0.1, gunHeight * 0.4);
+
+    // Muzzle flash
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2.2;
+      ctx.fillStyle = 'rgba(255,255,100,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,150,0,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+    ctx.fill();
+    }
+  }
+
+  drawRocketLauncher(ctx) {
+    const gunLength = this.size * 2.8;
+    const gunHeight = this.size * 0.6;
+
+    // Stock
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fillRect(-this.size * 0.7, -gunHeight * 0.5, this.size * 0.8, gunHeight);
+
+    // Launcher tube (round)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.arc(0, 0, gunHeight * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tube body
+    ctx.fillStyle = '#333';
+    ctx.fillRect(0, -gunHeight * 0.8, gunLength, gunHeight * 1.6);
+
+    // Tube opening (front)
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(gunLength, 0, gunHeight * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Rocket inside (when not firing)
+    if (this.reloadProgress < 0.3) {
+      ctx.fillStyle = '#ff6600';
+      ctx.beginPath();
+      ctx.arc(gunLength - this.size * 0.5, 0, gunHeight * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Rocket fins
+      ctx.fillStyle = '#888';
+      for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI * 2) / 4;
+        const finX = gunLength - this.size * 0.6 + Math.cos(angle) * gunHeight * 0.4;
+        const finY = Math.sin(angle) * gunHeight * 0.4;
+        ctx.fillRect(finX - 2, finY - 2, 4, 8);
+      }
+    }
+
+    // Muzzle flash (explosive)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 3.5;
+      ctx.fillStyle = 'rgba(255,150,0,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,50,0,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(100,0,0,0.5)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawLaserRifle(ctx) {
+    const gunLength = this.size * 2.6;
+    const gunHeight = this.size * 0.4;
+
+    // Stock (sleek)
+    ctx.fillStyle = '#2a1a3a';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.4, this.size * 0.7, gunHeight * 0.8);
+
+    // Body (futuristic)
+    ctx.fillStyle = '#1a1a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.5, this.size * 1.6, gunHeight);
+
+    // Energy core (glowing)
+    ctx.fillStyle = '#0ff';
+    ctx.fillRect(this.size * 0.3, -gunHeight * 0.3, this.size * 0.4, gunHeight * 0.6);
+    ctx.fillStyle = '#0aa';
+    ctx.fillRect(this.size * 0.35, -gunHeight * 0.25, this.size * 0.3, gunHeight * 0.5);
+
+    // Barrel (glowing)
+    ctx.fillStyle = '#2a2a4a';
+    ctx.fillRect(this.size * 1.4, -gunHeight * 0.3, gunLength - this.size * 1.4, gunHeight * 0.6);
+
+    // Laser emitter
+    ctx.fillStyle = '#00ffff';
+    ctx.fillRect(gunLength - this.size * 0.2, -gunHeight * 0.2, this.size * 0.2, gunHeight * 0.4);
+
+    // Muzzle flash (laser beam)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2.8;
+      ctx.fillStyle = 'rgba(0,255,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(100,255,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(150,255,255,0.3)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawDualPistols(ctx) {
+    const gunLength = this.size * 1.2;
+    const gunHeight = this.size * 0.3;
+
+    // Left pistol (offset up)
+    ctx.save();
+    ctx.translate(-this.size * 0.3, -this.size * 0.2);
+
+    // Grip
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(-this.size * 0.3, gunHeight * 0.3, this.size * 0.5, this.size * 0.6);
+
+    // Frame
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.3, this.size * 0.9, gunHeight * 0.6);
+
+    // Barrel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 0.7, -gunHeight * 0.2, gunLength - this.size * 0.7, gunHeight * 0.4);
+
+    // Muzzle
+    ctx.fillStyle = '#000';
+    ctx.fillRect(gunLength - this.size * 0.1, -gunHeight * 0.15, this.size * 0.1, gunHeight * 0.3);
+
+    // Muzzle flash
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 1.2;
+      ctx.fillStyle = 'rgba(255,255,100,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    // Right pistol (offset down)
+    ctx.save();
+    ctx.translate(this.size * 0.3, this.size * 0.2);
+
+    // Grip
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(-this.size * 0.3, gunHeight * 0.3, this.size * 0.5, this.size * 0.6);
+
+    // Frame
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.3, this.size * 0.9, gunHeight * 0.6);
+
+    // Barrel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 0.7, -gunHeight * 0.2, gunLength - this.size * 0.7, gunHeight * 0.4);
+
+    // Muzzle
+    ctx.fillStyle = '#000';
+    ctx.fillRect(gunLength - this.size * 0.1, -gunHeight * 0.15, this.size * 0.1, gunHeight * 0.3);
+
+    // Muzzle flash
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 1.2;
+      ctx.fillStyle = 'rgba(255,255,100,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  drawSMG(ctx) {
+    const gunLength = this.size * 2.0;
+    const gunHeight = this.size * 0.35;
+
+    // Compact stock
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(-this.size * 0.4, -gunHeight * 0.4, this.size * 0.5, gunHeight * 0.8);
+
+    // Receiver (compact)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.15, -gunHeight * 0.5, this.size * 1.2, gunHeight);
+
+    // Magazine
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 0.3, gunHeight * 0.3, this.size * 0.3, this.size * 0.5);
+
+    // Barrel (short)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 1.05, -gunHeight * 0.3, gunLength - this.size * 1.05, gunHeight * 0.6);
+
+    // Muzzle flash
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 1.5;
+      ctx.fillStyle = 'rgba(255,200,0,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawBurstRifle(ctx) {
+    const gunLength = this.size * 2.3;
+    const gunHeight = this.size * 0.38;
+
+    // Stock
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.4, this.size * 0.6, gunHeight * 0.8);
+
+    // Receiver
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.5, this.size * 1.4, gunHeight);
+
+    // Burst selector (visual indicator)
+    ctx.fillStyle = '#555';
+    ctx.fillRect(this.size * 0.5, -gunHeight * 0.6, this.size * 0.3, this.size * 0.1);
+
+    // Barrel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 1.2, -gunHeight * 0.3, gunLength - this.size * 1.2, gunHeight * 0.6);
+
+    // Muzzle flash (burst effect)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2.0;
+      ctx.fillStyle = 'rgba(255,255,150,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,200,100,0.6)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawPlasmaRifle(ctx) {
+    const gunLength = this.size * 2.4;
+    const gunHeight = this.size * 0.4;
+
+    // Stock (tech)
+    ctx.fillStyle = '#1a1a3a';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.4, this.size * 0.7, gunHeight * 0.8);
+
+    // Body (plasma blue)
+    ctx.fillStyle = '#1a2a4a';
+    ctx.fillRect(-this.size * 0.2, -gunHeight * 0.5, this.size * 1.5, gunHeight);
+
+    // Plasma core (glowing blue)
+    ctx.fillStyle = '#00aaff';
+    ctx.fillRect(this.size * 0.4, -gunHeight * 0.3, this.size * 0.5, gunHeight * 0.6);
+    ctx.fillStyle = '#0088ff';
+    ctx.fillRect(this.size * 0.45, -gunHeight * 0.25, this.size * 0.4, gunHeight * 0.5);
+
+    // Barrel (energy)
+    ctx.fillStyle = '#2a3a5a';
+    ctx.fillRect(this.size * 1.3, -gunHeight * 0.3, gunLength - this.size * 1.3, gunHeight * 0.6);
+
+    // Muzzle (plasma glow)
+    ctx.fillStyle = '#00ccff';
+    ctx.fillRect(gunLength - this.size * 0.2, -gunHeight * 0.2, this.size * 0.2, gunHeight * 0.4);
+
+    // Muzzle flash (plasma burst)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2.5;
+      ctx.fillStyle = 'rgba(0,200,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(0,150,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawCrossbow(ctx) {
+    const gunLength = this.size * 2.0;
+    const gunHeight = this.size * 0.45;
+
+    // Crossbow body (wood/brown)
+    ctx.fillStyle = '#8b4513';
+    ctx.fillRect(-this.size * 0.3, -gunHeight * 0.5, this.size * 1.5, gunHeight);
+
+    // Bow arms
+    ctx.fillStyle = '#654321';
+    ctx.beginPath();
+    ctx.arc(this.size * 1.2, -gunHeight * 0.8, this.size * 0.3, 0, Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.size * 1.2, gunHeight * 0.8, this.size * 0.3, Math.PI, 0);
+    ctx.fill();
+
+    // String
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(this.size * 0.9, -gunHeight * 0.6);
+    ctx.lineTo(this.size * 1.2, -gunHeight * 0.8);
+    ctx.lineTo(this.size * 1.2, gunHeight * 0.8);
+    ctx.lineTo(this.size * 0.9, gunHeight * 0.6);
+    ctx.stroke();
+
+    // Bolt/arrow
+    ctx.fillStyle = '#888';
+    ctx.fillRect(gunLength - this.size * 0.3, -this.size * 0.05, this.size * 0.3, this.size * 0.1);
+
+    // Muzzle flash (arrow release)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 1.8;
+      ctx.fillStyle = 'rgba(150,150,150,0.8)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawMinigun(ctx) {
+    const gunLength = this.size * 2.8;
+    const gunHeight = this.size * 0.5;
+
+    // Minigun body (heavy, bulky)
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(-this.size * 0.4, -gunHeight * 0.6, this.size * 2.0, gunHeight * 1.2);
+
+    // Multiple barrels (rotating barrels)
+    const barrelCount = 6;
+    for (let i = 0; i < barrelCount; i++) {
+      const angle = (i / barrelCount) * Math.PI * 2 + (performance.now() / 50) % (Math.PI * 2);
+      const barrelX = this.size * 1.8 + Math.cos(angle) * this.size * 0.2;
+      const barrelY = Math.sin(angle) * this.size * 0.2;
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(barrelX, barrelY, this.size * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Barrel housing
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.arc(this.size * 1.8, 0, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ammo belt
+    ctx.fillStyle = '#555';
+    ctx.fillRect(this.size * 0.8, gunHeight * 0.5, this.size * 0.8, this.size * 0.15);
+
+    // Muzzle flash (intense)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 3.0;
+      ctx.fillStyle = 'rgba(255,150,0,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,200,100,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawRailgun(ctx) {
+    const gunLength = this.size * 3.0;
+    const gunHeight = this.size * 0.45;
+
+    // Railgun body (long, heavy)
+    ctx.fillStyle = '#1a1a2a';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.5, this.size * 2.8, gunHeight);
+
+    // Capacitor banks (glowing)
+    ctx.fillStyle = '#00ff00';
+    ctx.fillRect(this.size * 0.5, -gunHeight * 0.7, this.size * 0.4, this.size * 0.2);
+    ctx.fillRect(this.size * 0.5, gunHeight * 0.5, this.size * 0.4, this.size * 0.2);
+
+    // Rail tracks (glowing)
+    ctx.fillStyle = '#00ff88';
+    ctx.fillRect(this.size * 1.0, -gunHeight * 0.3, gunLength - this.size * 1.0, this.size * 0.05);
+    ctx.fillRect(this.size * 1.0, gunHeight * 0.25, gunLength - this.size * 1.0, this.size * 0.05);
+
+    // Barrel (long, charged)
+    ctx.fillStyle = '#2a2a4a';
+    ctx.fillRect(this.size * 1.5, -gunHeight * 0.35, gunLength - this.size * 1.5, gunHeight * 0.7);
+
+    // Muzzle flash (electric burst)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 3.5;
+      ctx.fillStyle = 'rgba(0,255,150,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(100,255,200,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawFlamethrower(ctx) {
+    const gunLength = this.size * 2.2;
+    const gunHeight = this.size * 0.5;
+
+    // Flamethrower body (tank style)
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.6, this.size * 1.5, gunHeight * 1.2);
+
+    // Fuel tank (round)
+    ctx.fillStyle = '#2a1a1a';
+    ctx.beginPath();
+    ctx.arc(this.size * 0.3, 0, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nozzle (wide)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(this.size * 1.0, -gunHeight * 0.4, gunLength - this.size * 1.0, gunHeight * 0.8);
+
+    // Flame thrower tip
+    ctx.fillStyle = '#4a2a1a';
+    ctx.fillRect(gunLength - this.size * 0.2, -gunHeight * 0.35, this.size * 0.2, gunHeight * 0.7);
+
+    // Muzzle flash (flame)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2.8;
+      ctx.fillStyle = 'rgba(255,100,0,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,150,0,0.8)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,200,0,0.6)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawChainGun(ctx) {
+    const gunLength = this.size * 2.6;
+    const gunHeight = this.size * 0.48;
+
+    // Chain gun body
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(-this.size * 0.4, -gunHeight * 0.6, this.size * 1.8, gunHeight * 1.2);
+
+    // Chain feed
+    ctx.fillStyle = '#2a2a2a';
+    for (let i = 0; i < 8; i++) {
+      ctx.fillRect(this.size * 0.4 + i * this.size * 0.15, -gunHeight * 0.7, this.size * 0.1, this.size * 0.15);
+    }
+
+    // Barrel shroud
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(this.size * 1.4, -gunHeight * 0.5, gunLength - this.size * 1.4, gunHeight);
+
+    // Barrel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.arc(this.size * 2.0, 0, this.size * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Muzzle flash
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 2.2;
+      ctx.fillStyle = 'rgba(255,180,0,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawQuantumRifle(ctx) {
+    const gunLength = this.size * 2.7;
+    const gunHeight = this.size * 0.42;
+
+    // Quantum rifle body (futuristic, glowing)
+    ctx.fillStyle = '#1a0a2a';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.5, this.size * 2.5, gunHeight);
+
+    // Quantum core (pulsing purple/blue)
+    const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(150,0,255,${pulse})`;
+    ctx.fillRect(this.size * 0.6, -gunHeight * 0.4, this.size * 0.6, gunHeight * 0.8);
+    ctx.fillStyle = '#6600ff';
+    ctx.fillRect(this.size * 0.65, -gunHeight * 0.35, this.size * 0.5, gunHeight * 0.7);
+
+    // Energy channels (glowing lines)
+    ctx.fillStyle = '#9900ff';
+    ctx.fillRect(this.size * 1.3, -gunHeight * 0.3, gunLength - this.size * 1.3, this.size * 0.04);
+    ctx.fillRect(this.size * 1.3, gunHeight * 0.26, gunLength - this.size * 1.3, this.size * 0.04);
+
+    // Barrel (energy)
+    ctx.fillStyle = '#2a1a4a';
+    ctx.fillRect(this.size * 1.5, -gunHeight * 0.35, gunLength - this.size * 1.5, gunHeight * 0.7);
+
+    // Muzzle (quantum)
+    ctx.fillStyle = '#ff00ff';
+    ctx.fillRect(gunLength - this.size * 0.25, -gunHeight * 0.25, this.size * 0.25, gunHeight * 0.5);
+
+    // Muzzle flash (quantum burst)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 3.2;
+      ctx.fillStyle = 'rgba(255,0,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(150,0,255,0.8)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(100,0,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawTeslaCannon(ctx) {
+    const gunLength = this.size * 2.7;
+    const gunHeight = this.size * 0.46;
+
+    // Tesla cannon body (electric)
+    ctx.fillStyle = '#1a2a3a';
+    ctx.fillRect(-this.size * 0.5, -gunHeight * 0.5, this.size * 2.6, gunHeight);
+
+    // Tesla coils (glowing blue)
+    ctx.fillStyle = '#0099ff';
+    ctx.fillRect(this.size * 0.5, -gunHeight * 0.7, this.size * 0.4, this.size * 0.2);
+    ctx.fillRect(this.size * 0.5, gunHeight * 0.5, this.size * 0.4, this.size * 0.2);
+    ctx.fillRect(this.size * 1.2, -gunHeight * 0.7, this.size * 0.4, this.size * 0.2);
+    ctx.fillRect(this.size * 1.2, gunHeight * 0.5, this.size * 0.4, this.size * 0.2);
+
+    // Energy core (glowing)
+    ctx.fillStyle = '#00ccff';
+    ctx.fillRect(this.size * 0.8, -gunHeight * 0.4, this.size * 0.6, gunHeight * 0.8);
+    ctx.fillStyle = '#00aaff';
+    ctx.fillRect(this.size * 0.85, -gunHeight * 0.35, this.size * 0.5, gunHeight * 0.7);
+
+    // Barrel (electric)
+    ctx.fillStyle = '#2a3a5a';
+    ctx.fillRect(this.size * 1.6, -gunHeight * 0.35, gunLength - this.size * 1.6, gunHeight * 0.7);
+
+    // Tesla emitter (sparking)
+    ctx.fillStyle = '#00ffff';
+    ctx.fillRect(gunLength - this.size * 0.25, -gunHeight * 0.25, this.size * 0.25, gunHeight * 0.5);
+
+    // Muzzle flash (electric burst with sparks)
+    if (this.reloadProgress > 0.7) {
+      const flashSize = (1 - this.reloadProgress) * this.size * 3.0;
+      ctx.fillStyle = 'rgba(0,200,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(100,255,255,0.7)';
+      ctx.beginPath();
+      ctx.arc(gunLength, 0, flashSize * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      // Sparks
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const sparkX = gunLength + Math.cos(angle) * flashSize * 0.6;
+        const sparkY = Math.sin(angle) * flashSize * 0.6;
+        ctx.fillStyle = '#00ffff';
+        ctx.beginPath();
+        ctx.arc(sparkX, sparkY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+class Zombie {
+  constructor(canvas, type = 'normal') {
+    this.canvas = canvas;
+    this.type = type;
+    const config = CONFIG.ZOMBIES[type.toUpperCase()] || CONFIG.ZOMBIES.NORMAL;
+    this.size = config.SIZE;
+    this.speed = config.SPEED;
+    this.baseSpeed = config.SPEED; // Store base speed for fortress collision slowdown
+    this.health = config.HEALTH;
+    this.maxHealth = config.HEALTH;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.stuckTimer = 0;
+    this.elite = Math.random() < CONFIG.ZOMBIES.ELITE_CHANCE;
+    this.variant = Math.random() < CONFIG.ZOMBIES.VARIANT_CHANCE ? 'hat' : null;
+
+    // Damage/missing limbs (calculated once, not every frame)
+    this.hasLeftArm = Math.random() > 0.25;
+    this.hasRightArm = Math.random() > 0.25;
+
+    // Death animation system
+    this.dying = false;
+    this.deathProgress = 0;
+    this.deathType = null;
+    this.deathRotation = 0;
+    this.deathVelocityX = 0;
+    this.deathVelocityY = 0;
+
+    // Walk animation
+    this.walkCycle = Math.random() * Math.PI * 2; // Random start phase
+    this.walkBob = 0;
+    this.headTilt = 0;
+    this.armSwing = 0;
+
+    // Boss-specific
+    if (type === 'boss') {
+      this.minionInterval = CONFIG.ZOMBIES.BOSS.MINION_INTERVAL;
+      this.nextMinionTime = Date.now() + this.minionInterval;
+    }
+
+    // Spawn from random edge
+    this.spawnFromEdge();
+  }
+
+  spawnFromEdge() {
+    const edge = Math.floor(Math.random() * 4);
+    if (edge === 0) {
+      this.x = Math.random() * this.canvas.width;
+      this.y = -20;
+    } else if (edge === 1) {
+      this.x = this.canvas.width + 20;
+      this.y = Math.random() * this.canvas.height;
+    } else if (edge === 2) {
+      this.x = Math.random() * this.canvas.width;
+      this.y = this.canvas.height + 20;
+    } else {
+      this.x = -20;
+      this.y = Math.random() * this.canvas.height;
+    }
+    this.lastX = this.x;
+    this.lastY = this.y;
+  }
+
+  update(playerX, playerY, shieldActive) {
+    const dx = playerX - this.x;
+    const dy = playerY - this.y;
+    const dist = Math.hypot(dx, dy);
+
+    this.x += (dx / dist) * this.speed;
+    this.y += (dy / dist) * this.speed;
+
+    // Update walk animation (speed-based)
+    const isMoving = Math.abs(this.x - this.lastX) > 0.1 || Math.abs(this.y - this.lastY) > 0.1;
+    if (isMoving) {
+      // Type-specific walk speeds
+      let walkSpeed = 0.15;
+      if (this.type === 'runner') walkSpeed = 0.3; // Fast shamble
+      if (this.type === 'tank') walkSpeed = 0.08; // Slow lumber
+      if (this.type === 'boss') walkSpeed = 0.05; // Slow menacing
+
+      this.walkCycle += walkSpeed;
+
+      // Body bob (up and down motion)
+      if (this.type === 'tank') {
+        this.walkBob = Math.sin(this.walkCycle) * 3; // Heavy stomp
+      } else if (this.type === 'runner') {
+        this.walkBob = Math.sin(this.walkCycle * 1.5) * 2; // Quick bob
+      } else {
+        this.walkBob = Math.sin(this.walkCycle) * 1.5; // Normal shamble
+      }
+
+      // Head tilt (side to side sway)
+      this.headTilt = Math.sin(this.walkCycle * 0.7) * 0.15;
+
+      // Arm swing
+      this.armSwing = Math.sin(this.walkCycle) * 8;
+    }
+
+    // Check collision with player
+    const collisionDist = dist < (this.size + CONFIG.PLAYER.SIZE);
+    if (collisionDist && !shieldActive) {
+      return CONFIG.ZOMBIES.DAMAGE_PER_FRAME; // Return damage dealt
+    }
+
+    // Anti-stuck system
+    const moved = Math.hypot(this.x - this.lastX, this.y - this.lastY);
+    if (moved < 0.5) {
+      this.stuckTimer++;
+      if (this.stuckTimer > CONFIG.ZOMBIES.STUCK_THRESHOLD) {
+        this.spawnFromEdge();
+        this.stuckTimer = 0;
+      }
+    } else {
+      this.stuckTimer = 0;
+    }
+    this.lastX = this.x;
+    this.lastY = this.y;
+
+    return 0;
+  }
+
+  drawEliteAura(ctx, bodyY) {
+    // Elite aura glow removed - using particles instead
+  }
+
+  draw(ctx) {
+    // Boss rendering
+    if (this.type === 'boss') {
+      this.drawBoss(ctx);
+      return;
+    }
+
+    // Type-specific zombie rendering
+    switch (this.type) {
+      case 'tank': this.drawTank(ctx); break;
+      case 'runner': this.drawRunner(ctx); break;
+      case 'explosive': this.drawExplosive(ctx); break;
+      case 'healer': this.drawHealer(ctx); break;
+      default: this.drawNormal(ctx);
+    }
+  }
+
+  drawBoss(ctx) {
+    // BOSS - Multi-headed monstrosity
+    const pulse = Math.sin(performance.now() / 200) * 0.1;
+
+    // Boss aura glow removed - using particles instead
+
+    // Main grotesque body (irregular shape)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y, this.size * 1.2, this.size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#600';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Exposed ribs/spine
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - this.size * 0.5 + i * this.size * 0.3, this.size * 0.7, Math.PI, 0);
+      ctx.stroke();
+    }
+
+    // Three glowing red eyes (mutated)
+    const eyes = [
+      { x: -this.size * 0.3, y: -this.size * 0.3 },
+      { x: this.size * 0.3, y: -this.size * 0.3 },
+      { x: 0, y: -this.size * 0.6 }
+    ];
+    eyes.forEach(eye => {
+      // Eye glow
+      ctx.fillStyle = 'rgba(255,0,0,0.6)';
+      ctx.beginPath();
+      ctx.arc(this.x + eye.x, this.y + eye.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      // Eye core
+      ctx.fillStyle = '#ff0000';
+      ctx.beginPath();
+      ctx.arc(this.x + eye.x, this.y + eye.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Tentacles/extra limbs
+    for (let i = 0; i < 4; i++) {
+      const angle = (Math.PI * 2 / 4) * i + performance.now() / 1000;
+      const tentacleLen = this.size * 1.5;
+      ctx.strokeStyle = '#2a2a2a';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.quadraticCurveTo(
+        this.x + Math.cos(angle) * tentacleLen * 0.5,
+        this.y + Math.sin(angle) * tentacleLen * 0.5 + Math.sin(performance.now() / 300 + i) * 10,
+        this.x + Math.cos(angle) * tentacleLen,
+        this.y + Math.sin(angle) * tentacleLen
+      );
+      ctx.stroke();
+    }
+
+    // Health bar
+    const barW = this.size * 2.5;
+    const barH = 8;
+    const ratio = Math.max(0, this.health / this.maxHealth);
+    const bx = this.x - barW / 2;
+    const by = this.y - this.size * 1.5 - 15;
+    ctx.fillStyle = '#300';
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(bx, by, barW * ratio, barH);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, barW, barH);
+
+    // BOSS label
+    ctx.fillStyle = '#ff0000';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💀 BOSS 💀', this.x, by - 8);
+  }
+
+  drawTank(ctx) {
+    // TANK - Hulking muscular body
+    const color = this.elite ? '#0ff' : '#663366';
+    const bodyY = this.y + this.walkBob;
+
+    // Elite aura
+    this.drawEliteAura(ctx, bodyY);
+
+    // Massive shoulders
+    ctx.fillStyle = color;
+    ctx.fillRect(this.x - this.size * 1.2, bodyY - this.size * 0.6, this.size * 2.4, this.size * 0.8);
+
+    // Huge torso (wider body)
+    ctx.fillRect(this.x - this.size * 0.9, bodyY - this.size * 0.2, this.size * 1.8, this.size * 1.4);
+
+    // Bulging muscles (abs)
+    ctx.fillStyle = '#551155';
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(this.x - this.size * 0.3, bodyY + i * this.size * 0.4, this.size * 0.6, this.size * 0.35);
+    }
+
+    // Small head (hunched) with tilt
+    ctx.fillStyle = '#8a668a';
+    ctx.save();
+    ctx.translate(this.x, bodyY - this.size * 0.8);
+    ctx.rotate(this.headTilt * 0.5); // Slow head sway for tank
+    ctx.beginPath();
+    ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Angry eyes
+    ctx.fillStyle = '#ff0';
+    ctx.fillRect(-4, 0, 3, 3);
+    ctx.fillRect(1, 0, 3, 3);
+    ctx.restore();
+
+    // HUGE dragging arms (with animated swing)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    if (this.hasLeftArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 1.1, bodyY - this.size * 0.2);
+      ctx.lineTo(this.x - this.size * 1.8 + this.armSwing * 0.5, bodyY + this.size * 1.2);
+      ctx.stroke();
+    }
+    if (this.hasRightArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.size * 1.1, bodyY - this.size * 0.2);
+      ctx.lineTo(this.x + this.size * 1.8 - this.armSwing * 0.5, bodyY + this.size * 1.2);
+      ctx.stroke();
+    }
+
+    this.drawHealthBar(ctx);
+  }
+
+  drawRunner(ctx) {
+    // RUNNER - Lean sprinting body
+    const color = this.elite ? '#0ff' : '#aaa04a';
+    const bodyY = this.y + this.walkBob;
+
+    // Elite aura
+    this.drawEliteAura(ctx, bodyY);
+
+    // Lean forward posture (speed lines - more dynamic)
+    ctx.strokeStyle = 'rgba(170,160,74,0.3)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      const lineOffset = Math.sin(this.walkCycle + i) * 3; // Animated speed lines
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 1.5 - i * 5, bodyY + lineOffset);
+      ctx.lineTo(this.x - this.size * 2.5 - i * 5, bodyY + lineOffset);
+      ctx.stroke();
+    }
+
+    // Skinny body (athletic build) - lean forward
+    const leanAngle = 0.1; // Forward lean
+    ctx.save();
+    ctx.translate(this.x, bodyY);
+    ctx.rotate(leanAngle);
+
+    ctx.fillStyle = color;
+    ctx.fillRect(-this.size * 0.5, -this.size * 0.4, this.size, this.size * 1.4);
+
+    // Torn running shirt
+    ctx.fillStyle = '#888';
+    ctx.fillRect(-this.size * 0.4, -this.size * 0.3, this.size * 0.8, this.size * 0.8);
+    // Rips in shirt
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-this.size * 0.2, 0);
+    ctx.lineTo(this.size * 0.2, this.size * 0.3);
+    ctx.stroke();
+    ctx.restore();
+
+    // Head (leaning forward) with wild shaking
+    ctx.fillStyle = '#c0c09a';
+    ctx.save();
+    ctx.translate(this.x + this.size * 0.2, bodyY - this.size * 0.7);
+    ctx.rotate(this.headTilt * 1.5); // Wild head movement
+    ctx.beginPath();
+    ctx.arc(0, 0, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wild eyes
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(-this.size * 0.15, 0, 2, 3);
+    ctx.fillRect(this.size * 0.05, 0, 2, 3);
+    ctx.restore();
+
+    // Thin reaching arms (pumping motion)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    if (this.hasLeftArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 0.4, bodyY);
+      ctx.lineTo(this.x - this.size * 1.2, bodyY - this.size * 0.2 - this.armSwing);
+      ctx.stroke();
+    }
+    if (this.hasRightArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.size * 0.4, bodyY);
+      ctx.lineTo(this.x + this.size * 1.4, bodyY + this.armSwing);
+      ctx.stroke();
+    }
+
+    this.drawHealthBar(ctx);
+  }
+
+  drawExplosive(ctx) {
+    // EXPLOSIVE - Bloated pulsing body
+    const color = this.elite ? '#0ff' : '#993333';
+    const pulse = Math.sin(performance.now() / 150) * 0.15;
+    const bodyY = this.y + this.walkBob;
+
+    // Elite aura
+    this.drawEliteAura(ctx, bodyY);
+
+    // Explosive warning glow removed - using particles instead
+
+    // Bloated body (bigger) with wobble
+    ctx.fillStyle = color;
+    ctx.save();
+    ctx.translate(this.x, bodyY);
+    ctx.rotate(this.headTilt * 0.3); // Slight wobble
+    ctx.beginPath();
+    ctx.arc(0, 0, this.size * (1.1 + pulse * 0.5), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Pulsing red veins (warning)
+    ctx.strokeStyle = `rgba(255,0,0,${0.7 + pulse})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      const angle = (Math.PI * 2 / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(this.x, bodyY);
+      ctx.lineTo(
+        this.x + Math.cos(angle) * this.size * 0.8,
+        bodyY + Math.sin(angle) * this.size * 0.8
+      );
+      ctx.stroke();
+    }
+
+    // Bulging weak spots (glowing)
+    ctx.fillStyle = `rgba(255,255,0,${0.6 + pulse})`;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.4, bodyY, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.4, bodyY, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Small head with shake
+    ctx.fillStyle = '#c08080';
+    ctx.save();
+    ctx.translate(this.x, bodyY - this.size * 0.8);
+    ctx.rotate(this.headTilt);
+    ctx.beginPath();
+    ctx.arc(0, 0, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Distressed eyes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-4, 0, 2, 4);
+    ctx.fillRect(2, 0, 2, 4);
+    ctx.restore();
+
+    // Unstable arms (with walk swing + random twitch)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    if (this.hasLeftArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 0.7, bodyY);
+      ctx.lineTo(this.x - this.size * 1.0, bodyY + this.size * 0.5 + this.armSwing * 0.3);
+      ctx.stroke();
+    }
+    if (this.hasRightArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.size * 0.7, bodyY);
+      ctx.lineTo(this.x + this.size * 1.0, bodyY + this.size * 0.5 - this.armSwing * 0.3);
+      ctx.stroke();
+    }
+
+    this.drawHealthBar(ctx);
+  }
+
+  drawHealer(ctx) {
+    // HEALER - Emaciated dripping body
+    const color = this.elite ? '#0ff' : '#66cccc';
+    const bodyY = this.y + this.walkBob;
+
+    // Elite aura
+    this.drawEliteAura(ctx, bodyY);
+
+    // Healer aura glow removed - using particles instead
+
+    // Skeletal thin body (hunched over)
+    ctx.fillStyle = color;
+    ctx.save();
+    ctx.translate(this.x, bodyY);
+    ctx.rotate(this.headTilt * 0.2);
+    ctx.fillRect(-this.size * 0.4, -this.size * 0.3, this.size * 0.8, this.size * 1.2);
+
+    // Visible ribs
+    ctx.strokeStyle = '#448888';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-this.size * 0.3, -this.size * 0.2 + i * this.size * 0.3);
+      ctx.lineTo(this.size * 0.3, -this.size * 0.2 + i * this.size * 0.3);
+      ctx.stroke();
+    }
+
+    // Glowing green pustules (healing source) - pulsing
+    ctx.fillStyle = '#0f0';
+    ctx.beginPath();
+    ctx.arc(-this.size * 0.3, 0, this.size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.size * 0.3, this.size * 0.4, this.size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Gaunt head (with sway)
+    ctx.fillStyle = '#8ac8c8';
+    ctx.save();
+    ctx.translate(this.x, bodyY - this.size * 0.6);
+    ctx.rotate(this.headTilt * 0.8); // Droopy head sway
+    ctx.beginPath();
+    ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hollow eyes
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(-3, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(3, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Thin drooping arms (swaying)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    if (this.hasLeftArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 0.4, bodyY);
+      ctx.lineTo(this.x - this.size * 0.6 - this.armSwing * 0.2, bodyY + this.size * 0.8);
+      ctx.stroke();
+    }
+    if (this.hasRightArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.size * 0.4, bodyY);
+      ctx.lineTo(this.x + this.size * 0.6 + this.armSwing * 0.2, bodyY + this.size * 0.8);
+      ctx.stroke();
+    }
+
+    // Dripping green ooze particles
+    if (Math.random() < 0.3) {
+      ctx.fillStyle = 'rgba(0,255,100,0.6)';
+      ctx.beginPath();
+      ctx.arc(this.x + (Math.random() - 0.5) * this.size, bodyY + this.size, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    this.drawHealthBar(ctx);
+  }
+
+  drawNormal(ctx) {
+    // NORMAL - Shambling office worker
+    const color = this.elite ? '#0ff' : '#6b8e23';
+    const bodyY = this.y + this.walkBob;
+
+    // Elite aura
+    this.drawEliteAura(ctx, bodyY);
+
+    // Torn shirt/tie
+    ctx.fillStyle = '#555';
+    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.3, this.size, this.size * 1.2);
+    // Tie hanging
+    ctx.fillStyle = '#900';
+    ctx.fillRect(this.x - this.size * 0.1, bodyY - this.size * 0.2, this.size * 0.2, this.size * 0.8);
+
+    // Body
+    ctx.fillStyle = color;
+    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.5, this.size * 1.2, this.size * 1.4);
+
+    // Head (tilted + shamble sway)
+    ctx.fillStyle = '#90a070';
+    ctx.save();
+    ctx.translate(this.x, bodyY - this.size * 0.6);
+    ctx.rotate(0.3 + this.headTilt); // Base tilt + shamble sway
+    ctx.beginPath();
+    ctx.arc(0, 0, this.size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dead eyes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-4, 0, 2, 2);
+    ctx.fillRect(2, 0, 2, 2);
+    ctx.restore();
+
+    // Regular arms (shambling swing)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    if (this.hasLeftArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 0.6, bodyY);
+      ctx.lineTo(this.x - this.size * 1.0, bodyY + this.size * 0.4 + this.armSwing * 0.3);
+      ctx.stroke();
+    }
+    if (this.hasRightArm) {
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.size * 0.6, bodyY);
+      ctx.lineTo(this.x + this.size * 1.0, bodyY + this.size * 0.4 - this.armSwing * 0.3);
+      ctx.stroke();
+    }
+
+    // Hat variant
+    if (this.variant === 'hat') {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.95, this.size, 4);
+      ctx.fillRect(this.x - this.size * 0.3, bodyY - this.size * 1.1, this.size * 0.6, 6);
+    }
+
+    this.drawHealthBar(ctx);
+  }
+
+  drawHealthBar(ctx) {
+    // Health bar (bold for mobile)
+    const barW = this.size * 2;
+    const barH = 5;
+    const ratio = Math.max(0, this.health / this.maxHealth);
+    const bx = this.x - barW / 2;
+    const by = this.y - this.size * 1.3 - 10;
+
+    // Background
+    ctx.fillStyle = '#300';
+    ctx.fillRect(bx, by, barW, barH);
+
+    // Health (color changes)
+    if (ratio > 0.6) {
+      ctx.fillStyle = '#0f0';
+    } else if (ratio > 0.3) {
+      ctx.fillStyle = '#ff0';
+    } else {
+      ctx.fillStyle = '#f00';
+    }
+    ctx.fillRect(bx, by, barW * ratio, barH);
+
+    // Border
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx, by, barW, barH);
+  }
+
+  startDeath(hitAngle = 0) {
+    this.dying = true;
+    this.deathProgress = 0;
+
+    // Choose death animation based on type
+    const deathTypes = ['fall_forward', 'fall_back', 'explode', 'dissolve', 'ragdoll'];
+
+    // Type-specific death preferences (for visual variety)
+    if (this.type === 'explosive') {
+      this.deathType = 'explode';
+    } else if (this.type === 'healer') {
+      this.deathType = 'dissolve';
+    } else if (this.type === 'boss') {
+      this.deathType = 'explode';
+    } else {
+      // Random for others
+      this.deathType = deathTypes[Math.floor(Math.random() * 3)]; // Only first 3 for variety
+    }
+
+    // Set physics based on death type
+    if (this.deathType === 'fall_forward') {
+      this.deathRotation = 0;
+      this.deathVelocityX = Math.cos(hitAngle) * 2;
+      this.deathVelocityY = Math.sin(hitAngle) * 2;
+    } else if (this.deathType === 'fall_back') {
+      this.deathRotation = 0;
+      this.deathVelocityX = -Math.cos(hitAngle) * 1.5;
+      this.deathVelocityY = -Math.sin(hitAngle) * 1.5;
+    } else if (this.deathType === 'ragdoll') {
+      this.deathRotation = (Math.random() - 0.5) * 0.3;
+      this.deathVelocityX = (Math.random() - 0.5) * 3;
+      this.deathVelocityY = (Math.random() - 0.5) * 3;
+    }
+  }
+
+  updateDeath() {
+    if (!this.dying) return false;
+
+    this.deathProgress += 0.05; // Animation speed
+
+    // Update based on death type
+    switch (this.deathType) {
+      case 'fall_forward':
+      case 'fall_back':
+        this.x += this.deathVelocityX;
+        this.y += this.deathVelocityY;
+        this.deathVelocityX *= 0.9; // Friction
+        this.deathVelocityY *= 0.9;
+        break;
+
+      case 'ragdoll':
+        this.x += this.deathVelocityX;
+        this.y += this.deathVelocityY;
+        this.deathVelocityX *= 0.95;
+        this.deathVelocityY *= 0.95;
+        this.deathRotation += 0.1;
+        break;
+
+      case 'explode':
+        // Stays in place, just fades/expands
+        break;
+
+      case 'dissolve':
+        // Stays in place, dissolves
+        break;
+    }
+
+    // Death complete after progress >= 1
+    return this.deathProgress >= 1;
+  }
+
+  drawDeath(ctx) {
+    if (!this.dying) return;
+
+    const alpha = 1 - this.deathProgress;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    switch (this.deathType) {
+      case 'fall_forward':
+        // Rotate and fall forward
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.deathProgress * Math.PI / 2);
+        ctx.translate(-this.x, -this.y);
+        this.draw(ctx);
+        break;
+
+      case 'fall_back':
+        // Rotate and fall backward
+        ctx.translate(this.x, this.y);
+        ctx.rotate(-this.deathProgress * Math.PI / 2);
+        ctx.translate(-this.x, -this.y);
+        this.draw(ctx);
+        break;
+
+      case 'explode':
+        // Scale up and fade out
+        const scale = 1 + this.deathProgress * 1.5;
+        ctx.translate(this.x, this.y);
+        ctx.scale(scale, scale);
+        ctx.translate(-this.x, -this.y);
+        this.draw(ctx);
+
+        // Red explosion effect
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.fillStyle = '#f00';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * scale * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+
+      case 'dissolve':
+        // Shrink and fade
+        const shrink = 1 - this.deathProgress * 0.7;
+        ctx.translate(this.x, this.y);
+        ctx.scale(shrink, shrink);
+        ctx.translate(-this.x, -this.y);
+        this.draw(ctx);
+
+        // Green dissolve particles
+        if (Math.random() < 0.5) {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = '#0f0';
+          const px = this.x + (Math.random() - 0.5) * this.size * 2;
+          const py = this.y + (Math.random() - 0.5) * this.size * 2;
+          ctx.beginPath();
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'ragdoll':
+        // Spin and fly
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.deathRotation * this.deathProgress * 10);
+        ctx.translate(-this.x, -this.y);
+        this.draw(ctx);
+        break;
+    }
+
+    ctx.restore();
+  }
+}
+
+class Bullet {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.x = 0;
+    this.y = 0;
+    this.dx = 0;
+    this.dy = 0;
+    this.size = CONFIG.BULLET.SIZE;
+    this.active = false;
+    // Ammo properties
+    this.ammoType = null;
+    this.damage = 1; // Base damage + ammo bonus
+    this.color = 'yellow'; // Default color
+    this.trailColor = 'orange';
+    this.pierceCount = 0; // How many zombies it can pierce
+    this.piercedZombies = []; // Track pierced zombies
+    this.explosiveRadius = 0; // AOE radius
+    this.effectType = null; // Special effect type
+    this.effectValue = 0; // Effect strength
+    this.critical = false; // Critical hit flag
+  }
+
+  init(x, y, angle, ammoType = null, upgradeBoosts = null) {
+    this.x = x;
+    this.y = y;
+    this.dx = Math.cos(angle) * CONFIG.BULLET.SPEED;
+    this.dy = Math.sin(angle) * CONFIG.BULLET.SPEED;
+    this.active = true;
+    this.piercedZombies = []; // Reset pierced zombies
+
+    // Apply ammo properties
+    if (ammoType) {
+      this.ammoType = ammoType;
+      this.damage = 1 + (ammoType.damageBonus || 0);
+      this.color = ammoType.color || 'yellow';
+      this.trailColor = ammoType.trailColor || 'orange';
+      this.size = CONFIG.BULLET.SIZE * (ammoType.size || 1);
+
+      // Handle special effects
+      if (ammoType.effect && ammoType.effect.type) {
+        this.effectType = ammoType.effect.type;
+        this.effectValue = ammoType.effect.value || 0;
+
+        if (ammoType.effect.type === 'piercing') {
+          this.pierceCount = ammoType.effect.value || 0;
+        } else if (ammoType.effect.type === 'explosive') {
+          this.explosiveRadius = ammoType.effect.value || 0;
+        } else if (ammoType.effect.type === 'critical') {
+          // Critical chance from ammo
+          let totalCritChance = ammoType.effect.value || 0;
+          let baseCritMultiplier = ammoType.tier >= 5 ? 3 : (ammoType.tier >= 4 ? 2.5 : 2);
+
+          // Add critical chance and multiplier from upgrades
+          if (upgradeBoosts) {
+            totalCritChance += (upgradeBoosts.critChance || 0);
+            baseCritMultiplier += (upgradeBoosts.critMultiplier || 0);
+          }
+
+          // Critical chance - determined at init
+          this.critical = Math.random() < totalCritChance;
+          if (this.critical) {
+            this.damage = Math.floor(this.damage * baseCritMultiplier);
+          }
+        }
+      }
+    } else {
+      // Default ammo - but still check for upgrade crit chance
+      this.ammoType = null;
+      this.damage = 1;
+      this.color = 'yellow';
+      this.trailColor = 'orange';
+      this.size = CONFIG.BULLET.SIZE;
+      this.pierceCount = 0;
+      this.explosiveRadius = 0;
+      this.effectType = null;
+      this.effectValue = 0;
+
+      // Apply upgrade crit chance even without special ammo
+      if (upgradeBoosts && (upgradeBoosts.critChance > 0)) {
+        this.critical = Math.random() < upgradeBoosts.critChance;
+        if (this.critical) {
+          const critMultiplier = 1 + (upgradeBoosts.critMultiplier || 0);
+          this.damage = Math.floor(this.damage * critMultiplier);
+        }
+      } else {
+        this.critical = false;
+      }
+    }
+  }
+
+  update(canvasWidth, canvasHeight) {
+    this.x += this.dx;
+    this.y += this.dy;
+
+    // Check if out of bounds
+    if (this.x < 0 || this.x > canvasWidth || this.y < 0 || this.y > canvasHeight) {
+      this.active = false;
+    }
+  }
+
+  draw(ctx) {
+    // Draw bullet with ammo color
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw critical hit indicator
+    if (this.critical) {
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size + 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    
+    // Trail effect for special ammo (simple glow)
+    if (this.ammoType && this.ammoType.particleType) {
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = this.trailColor;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+    }
+  }
+
+  checkCollision(zombie) {
+    // Check if already pierced this zombie
+    if (this.piercedZombies.includes(zombie)) {
+      return false;
+    }
+    return Math.hypot(this.x - zombie.x, this.y - zombie.y) < zombie.size;
+  }
+
+  markPierced(zombie) {
+    // Mark zombie as pierced
+    if (!this.piercedZombies.includes(zombie)) {
+      this.piercedZombies.push(zombie);
+    }
+  }
+
+  canPierce() {
+    return this.piercedZombies.length < this.pierceCount;
+  }
+}

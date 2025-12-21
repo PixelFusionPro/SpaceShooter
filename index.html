@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Necrotech Frontier</title>
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<div id="gameContainer">
+  <!-- Wave Intro Overlay -->
+  <div id="waveIntro">Wave <span id="waveNumber"></span></div>
+
+  <!-- Wave Recap -->
+  <div id="waveRecap"></div>
+
+  <!-- Game Canvas -->
+  <canvas id="game" width="360" height="600"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <!-- Top Bar: Primary Stats -->
+    <div class="hud-top">
+      <!-- Row 1: Stats (Wave, Rank, Score, Coins) -->
+      <div class="hud-stats-row">
+        <div class="hud-stat-card wave-card">
+          <div class="stat-icon">🌊</div>
+          <div class="stat-content">
+            <div class="stat-label">WAVE</div>
+            <div class="stat-value" id="wave">1</div>
+          </div>
+        </div>
+
+        <div class="hud-stat-card rank-card" id="rankCard">
+          <div class="stat-icon" id="rankIcon">🎖️</div>
+          <div class="stat-content">
+            <div class="stat-label">RANK</div>
+            <div class="stat-value" id="rank">Soldier</div>
+            <div class="rank-progress-container" id="rankProgressContainer" style="display:none;">
+              <div class="rank-progress-bar">
+                <div class="rank-progress-fill" id="rankProgressFill"></div>
+              </div>
+              <div class="rank-progress-text" id="rankProgressText"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-stat-card score-card">
+          <div class="stat-icon">⭐</div>
+          <div class="stat-content">
+            <div class="stat-label">SCORE</div>
+            <div class="stat-value" id="score">0</div>
+          </div>
+        </div>
+
+        <div class="hud-stat-card coin-card">
+          <div class="stat-icon">💰</div>
+          <div class="stat-content">
+            <div class="stat-label">COINS</div>
+            <div class="stat-value" id="coinCount">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Health Bar (Full Width) -->
+      <div class="hud-health">
+        <div class="health-icon">❤️</div>
+        <div class="health-value"><span id="health">100</span><span class="health-max">/100</span></div>
+        <div id="healthbar" class="health-bar">
+          <div id="healthfill" class="health-fill"></div>
+          <div class="health-glow"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Powerup Indicator (floating) -->
+    <div id="powerupIndicator" class="powerup-indicator" style="display:none;">
+      <div class="powerup-icon" id="powerupIcon">⚡</div>
+      <div class="powerup-name" id="activePowerup">SPEED</div>
+      <div class="powerup-timer" id="powerupTimer"></div>
+    </div>
+
+    <!-- Combo Display (animated overlay) -->
+    <div id="comboDisplay" class="combo-display" style="display:none;">
+      <div class="combo-icon">🔥</div>
+      <div class="combo-text">
+        <span class="combo-label">COMBO</span>
+        <span class="combo-count" id="comboCount">0</span><span class="combo-x">x</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="gameOverScreen" class="game-over-screen">
+    <div class="game-over-modal">
+      <h1 class="game-over-title">💀 GAME OVER 💀</h1>
+      <div class="game-over-stats">
+        <div class="stat-card">
+          <div class="stat-label">Final Score</div>
+          <div class="stat-value" id="finalScore">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Best Score</div>
+          <div class="stat-value" id="bestScoreDisplay">0 <span id="newRecord" class="new-record" style="display:none;">⭐</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Wave Reached</div>
+          <div class="stat-value" id="finalWave">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Zombies Killed</div>
+          <div class="stat-value" id="finalKills">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Coins Earned</div>
+          <div class="stat-value" id="coinsEarned">+0</div>
+        </div>
+      </div>
+      <div class="game-over-buttons">
+        <button class="btn-primary" onclick="playAgain()">Play Again</button>
+        <button class="btn-secondary" onclick="returnToMainMenu()">Main Menu</button>
+        <div class="game-over-secondary-buttons">
+          <button class="btn-secondary" onclick="openShopFromGameOver()">Shop</button>
+          <button class="btn-secondary" onclick="openInventoryFromGameOver()">Inventory</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Screen -->
+  <div id="pauseScreen" class="pause-screen">
+    <div class="pause-modal">
+      <h1 class="pause-title">⏸️ PAUSED</h1>
+      <div class="pause-stats">
+        <div class="pause-stat">
+          <span class="pause-stat-label">Wave:</span>
+          <span class="pause-stat-value" id="pauseWave">0</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat-label">Score:</span>
+          <span class="pause-stat-value" id="pauseScore">0</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat-label">Health:</span>
+          <span class="pause-stat-value" id="pauseHealth">0/100</span>
+        </div>
+      </div>
+      <div class="pause-buttons">
+        <button class="btn-primary" onclick="resumeGame()">Resume</button>
+        <button class="btn-secondary" onclick="pauseToMainMenu()">Main Menu</button>
+        <div class="pause-secondary-buttons">
+          <button class="btn-secondary" onclick="openShopFromPause()">Shop</button>
+          <button class="btn-secondary" onclick="openInventoryFromPause()">Inventory</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Damage Flash -->
+  <div id="damageFlash"></div>
+
+  <!-- Achievement Notification -->
+  <div id="achievementNotification" style="display:none;"></div>
+
+  <!-- Pause Button -->
+  <button onclick="togglePause()" class="pause-button">Pause</button>
+</div>
+
+<!-- Loading Screen -->
+<div id="loadingScreen" style="display:none;">
+  <h1>Loading...</h1>
+  <div class="loader"></div>
+</div>
+
+<!-- Main Menu -->
+<div id="mainMenu" class="main-menu">
+  <div class="main-menu-content">
+    <h1 class="main-menu-title">🧟 ZOMBIE SHOOTER<br>DEFENSE</h1>
+    <div class="main-menu-stats">
+      <div class="main-menu-stat">
+        <span class="stat-icon">🏆</span>
+        <span class="stat-label">Best Score:</span>
+        <span class="stat-value" id="menuBest">0</span>
+      </div>
+      <div class="main-menu-stat">
+        <span class="stat-icon">💰</span>
+        <span class="stat-label">Coins:</span>
+        <span class="stat-value" id="menuCoins">0</span>
+      </div>
+    </div>
+    <div class="main-menu-buttons">
+      <button class="btn-primary" onclick="startGame()">Start Game</button>
+      <div class="main-menu-secondary">
+        <button class="btn-secondary" onclick="openShop()">Shop</button>
+        <button class="btn-secondary" onclick="openInventory()">Inventory</button>
+        <button class="btn-secondary" onclick="openFortress()">Fortress</button>
+        <button class="btn-secondary" onclick="openCompanion()">Companions</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Shop Overlay -->
+<div id="shopOverlay" class="s1-overlay">
+  <div class="s1-container">
+    <div class="s1-header">
+      <h2>Shop</h2>
+      <button class="s1-close" onclick="closeShop()">✕</button>
+    </div>
+    <div class="s1-coins">
+      <span class="s1-icon">💰</span>
+      <span id="shopCoins">0</span>
+    </div>
+    <div class="s1-tabs">
+      <button class="s1-tab active" onclick="switchShopTab('weapon')"><span class="s1-tab-icon">🔫</span><span class="s1-tab-text">Weapons</span></button>
+      <button class="s1-tab" onclick="switchShopTab('armor')"><span class="s1-tab-icon">🛡️</span><span class="s1-tab-text">Armor</span></button>
+      <button class="s1-tab" onclick="switchShopTab('consumable')"><span class="s1-tab-icon">💉</span><span class="s1-tab-text">Items</span></button>
+      <button class="s1-tab" onclick="switchShopTab('upgrade')"><span class="s1-tab-icon">⭐</span><span class="s1-tab-text">Upgrades</span></button>
+      <button class="s1-tab" onclick="switchShopTab('ammunition')"><span class="s1-tab-icon">📦</span><span class="s1-tab-text">Ammo</span></button>
+    </div>
+    <div class="s1-items" id="shopItems"></div>
+  </div>
+</div>
+
+<!-- Inventory Overlay -->
+<div id="inventoryOverlay" class="i1-overlay">
+  <div class="i1-container">
+    <div class="i1-header">
+      <h2>Inventory</h2>
+      <button class="i1-close" onclick="closeInventory()">✕</button>
+    </div>
+    <div class="i1-equipped">
+      <div class="i1-slot">
+        <div class="i1-label">Weapon</div>
+        <div class="i1-item" id="equippedWeapon">-</div>
+      </div>
+      <div class="i1-slot">
+        <div class="i1-label">Armor</div>
+        <div class="i1-item" id="equippedArmor">-</div>
+      </div>
+      <div class="i1-slot">
+        <div class="i1-label">Ammo</div>
+        <div class="i1-item" id="equippedAmmo">-</div>
+      </div>
+      <div class="i1-slot">
+        <div class="i1-label">Powerup</div>
+        <div class="i1-item" id="equippedPowerup">-</div>
+      </div>
+    </div>
+    <div class="i1-tabs">
+      <button class="i1-tab active" onclick="switchInventoryTab('weapon')"><span class="i1-tab-icon">🔫</span><span class="i1-tab-text">Weapons</span></button>
+      <button class="i1-tab" onclick="switchInventoryTab('armor')"><span class="i1-tab-icon">🛡️</span><span class="i1-tab-text">Armor</span></button>
+      <button class="i1-tab" onclick="switchInventoryTab('consumable')"><span class="i1-tab-icon">💉</span><span class="i1-tab-text">Items</span></button>
+      <button class="i1-tab" onclick="switchInventoryTab('upgrade')"><span class="i1-tab-icon">⭐</span><span class="i1-tab-text">Upgrades</span></button>
+      <button class="i1-tab" onclick="switchInventoryTab('ammunition')"><span class="i1-tab-icon">📦</span><span class="i1-tab-text">Ammo</span></button>
+    </div>
+    <div class="i1-items" id="inventoryItems"></div>
+  </div>
+</div>
+
+<!-- Fortress Overlay -->
+<div id="fortressOverlay" class="f1-overlay">
+  <div class="f1-container">
+    <div class="f1-header">
+      <h2>Fortress Management</h2>
+      <div class="f1-coins">💰 <span id="fortressCoins">0</span></div>
+      <button class="f1-close" onclick="closeFortress()">✕</button>
+    </div>
+    <div class="f1-structures" id="fortressStructures"></div>
+  </div>
+</div>
+
+<!-- Companion Upgrade Overlay -->
+<div id="companionOverlay" class="c1-overlay">
+  <div class="c1-container">
+    <div class="c1-header">
+      <h2>Companion Upgrades</h2>
+      <div class="c1-coins">💰 <span id="companionCoins">0</span></div>
+      <button class="c1-close" onclick="closeCompanion()">✕</button>
+    </div>
+    <div class="c1-companions" id="companionUpgrades"></div>
+  </div>
+</div>
+
+<!-- Game Scripts -->
+<script src="js/config.js"></script>
+<script src="js/pool.js"></script>
+<!-- Entity Classes (split for better organization) -->
+<script src="js/entities/player.js"></script>
+<script src="js/entities/zombie.js"></script>
+<script src="js/entities/bullet.js"></script>
+<script src="js/powerups.js"></script>
+<script src="js/controls.js"></script>
+<!-- Managers -->
+<script src="js/particle-manager.js"></script>
+<script src="js/score-manager.js"></script>
+<script src="js/statistics-manager.js"></script>
+<script src="js/achievement-manager.js"></script>
+<script src="js/wave-manager.js"></script>
+<script src="js/zombie-manager.js"></script>
+<script src="js/companion-manager.js"></script>
+<script src="js/fortress-manager.js"></script>
+<script src="js/item-icons.js"></script>
+<script src="js/inventory-manager.js"></script>
+<!-- Shop Items Data -->
+<script src="js/data/shop-items.js"></script>
+<script src="js/shop-manager.js"></script>
+<script src="js/screen-manager.js"></script>
+<!-- Main Game -->
+<script src="js/game.js"></script>
+<!-- Shop & Inventory UI -->
+<script src="js/shop-ui.js"></script>
+<!-- Fortress UI -->
+<script src="js/fortress-ui.js"></script>
+<!-- Companion UI -->
+<script src="js/companion-ui.js"></script>
+</body>
+</html>
