@@ -6,11 +6,11 @@ class AchievementManager {
     this.achievements = JSON.parse(localStorage.getItem('achievements')) || {
       veteran: false,          // Survive 10 waves
       centurion: false,        // Score 100
-      sharpshooter: false,     // Kill 100 zombies
+      sharpshooter: false,     // Kill 100 enemies
       survivor: false,         // Reach wave 20
       powerCollector: false,   // Collect 50 powerups
       comboMaster: false,      // Get 10x combo
-      eliteHunter: false,      // Kill 10 elite zombies
+      eliteHunter: false,      // Kill 10 elite enemies
       bossSlayer: false,       // Kill 5 bosses
       rankLegend: false        // Reach Legend rank
     };
@@ -58,7 +58,7 @@ class AchievementManager {
     // Sharpshooter: Kill 100 zombies
     if (!this.achievements.sharpshooter && this.stats.totalKills >= 100) {
       this.achievements.sharpshooter = true;
-      unlocked.push({ title: 'SHARPSHOOTER', desc: 'Killed 100 Zombies!' });
+      unlocked.push({ title: 'SHARPSHOOTER', desc: 'Destroyed 100 Enemies!' });
     }
 
     // Survivor: Reach wave 20
@@ -82,7 +82,7 @@ class AchievementManager {
     // Elite Hunter: Kill 10 elite zombies
     if (!this.achievements.eliteHunter && this.stats.eliteKills >= 10) {
       this.achievements.eliteHunter = true;
-      unlocked.push({ title: 'ELITE HUNTER', desc: 'Killed 10 Elite Zombies!' });
+      unlocked.push({ title: 'ELITE HUNTER', desc: 'Eliminated 10 Elite Ships!' });
     }
 
     // Boss Slayer: Kill 5 bosses

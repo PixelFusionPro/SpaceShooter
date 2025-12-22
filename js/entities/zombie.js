@@ -141,22 +141,20 @@ class Zombie {
   }
 
   drawBoss(ctx) {
-    // BOSS - Multi-headed monstrosity
+    // BOSS - Alien Mothership (massive capital ship)
     const pulse = Math.sin(performance.now() / 200) * 0.1;
 
-    // Boss aura glow removed - using particles instead
-
-    // Main grotesque body (irregular shape)
-    ctx.fillStyle = '#1a1a1a';
+    // Main capital ship hull (massive elliptical structure)
+    ctx.fillStyle = '#3333ff';
     ctx.beginPath();
     ctx.ellipse(this.x, this.y, this.size * 1.2, this.size, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#600';
+    ctx.strokeStyle = '#0088ff';
     ctx.lineWidth = 4;
     ctx.stroke();
 
-    // Exposed ribs/spine
-    ctx.strokeStyle = '#ddd';
+    // Hull plating segments
+    ctx.strokeStyle = '#0066ff';
     ctx.lineWidth = 2;
     for (let i = 0; i < 4; i++) {
       ctx.beginPath();
@@ -164,39 +162,39 @@ class Zombie {
       ctx.stroke();
     }
 
-    // Three glowing red eyes (mutated)
-    const eyes = [
+    // Three command bridges (glowing windows)
+    const bridges = [
       { x: -this.size * 0.3, y: -this.size * 0.3 },
       { x: this.size * 0.3, y: -this.size * 0.3 },
       { x: 0, y: -this.size * 0.6 }
     ];
-    eyes.forEach(eye => {
-      // Eye glow
-      ctx.fillStyle = 'rgba(255,0,0,0.6)';
+    bridges.forEach(bridge => {
+      // Bridge glow
+      ctx.fillStyle = 'rgba(0,255,255,0.6)';
       ctx.beginPath();
-      ctx.arc(this.x + eye.x, this.y + eye.y, 8, 0, Math.PI * 2);
+      ctx.arc(this.x + bridge.x, this.y + bridge.y, 8, 0, Math.PI * 2);
       ctx.fill();
-      // Eye core
-      ctx.fillStyle = '#ff0000';
+      // Bridge core
+      ctx.fillStyle = '#00ffff';
       ctx.beginPath();
-      ctx.arc(this.x + eye.x, this.y + eye.y, 5, 0, Math.PI * 2);
+      ctx.arc(this.x + bridge.x, this.y + bridge.y, 5, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // Tentacles/extra limbs
+    // Weapon turrets (rotating)
     for (let i = 0; i < 4; i++) {
       const angle = (Math.PI * 2 / 4) * i + performance.now() / 1000;
-      const tentacleLen = this.size * 1.5;
-      ctx.strokeStyle = '#2a2a2a';
+      const turretLen = this.size * 1.5;
+      ctx.strokeStyle = '#6666ff';
       ctx.lineWidth = 6;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(this.x, this.y);
       ctx.quadraticCurveTo(
-        this.x + Math.cos(angle) * tentacleLen * 0.5,
-        this.y + Math.sin(angle) * tentacleLen * 0.5 + Math.sin(performance.now() / 300 + i) * 10,
-        this.x + Math.cos(angle) * tentacleLen,
-        this.y + Math.sin(angle) * tentacleLen
+        this.x + Math.cos(angle) * turretLen * 0.5,
+        this.y + Math.sin(angle) * turretLen * 0.5 + Math.sin(performance.now() / 300 + i) * 10,
+        this.x + Math.cos(angle) * turretLen,
+        this.y + Math.sin(angle) * turretLen
       );
       ctx.stroke();
     }
@@ -223,42 +221,43 @@ class Zombie {
   }
 
   drawTank(ctx) {
-    // TANK - Hulking muscular body
-    const color = this.elite ? '#0ff' : '#663366';
+    // TANK - Armored Destroyer (heavy battleship)
+    const color = this.elite ? '#0ff' : '#8844ff';
     const bodyY = this.y + this.walkBob;
 
     // Elite aura
     this.drawEliteAura(ctx, bodyY);
 
-    // Massive shoulders
-    ctx.fillStyle = color;
+    // Shield generators (side modules)
+    ctx.fillStyle = '#6633cc';
     ctx.fillRect(this.x - this.size * 1.2, bodyY - this.size * 0.6, this.size * 2.4, this.size * 0.8);
 
-    // Huge torso (wider body)
+    // Main armored hull (wider heavy body)
+    ctx.fillStyle = color;
     ctx.fillRect(this.x - this.size * 0.9, bodyY - this.size * 0.2, this.size * 1.8, this.size * 1.4);
 
-    // Bulging muscles (abs)
-    ctx.fillStyle = '#551155';
+    // Armor plating (segmented sections)
+    ctx.fillStyle = '#5522aa';
     for (let i = 0; i < 3; i++) {
       ctx.fillRect(this.x - this.size * 0.3, bodyY + i * this.size * 0.4, this.size * 0.6, this.size * 0.35);
     }
 
-    // Small head (hunched) with tilt
-    ctx.fillStyle = '#8a668a';
+    // Command bridge (fortified cockpit)
+    ctx.fillStyle = '#aa66ff';
     ctx.save();
     ctx.translate(this.x, bodyY - this.size * 0.8);
-    ctx.rotate(this.headTilt * 0.5); // Slow head sway for tank
+    ctx.rotate(this.headTilt * 0.5);
     ctx.beginPath();
     ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Angry eyes
+    // Bridge windows
     ctx.fillStyle = '#ff0';
     ctx.fillRect(-4, 0, 3, 3);
     ctx.fillRect(1, 0, 3, 3);
     ctx.restore();
 
-    // HUGE dragging arms (with animated swing)
+    // Heavy weapon turrets (with animated rotation)
     ctx.strokeStyle = color;
     ctx.lineWidth = 8;
     ctx.lineCap = 'round';
@@ -279,26 +278,26 @@ class Zombie {
   }
 
   drawRunner(ctx) {
-    // RUNNER - Lean sprinting body
-    const color = this.elite ? '#0ff' : '#aaa04a';
+    // RUNNER - Swift Interceptor (fast attack ship)
+    const color = this.elite ? '#0ff' : '#00ff88';
     const bodyY = this.y + this.walkBob;
 
     // Elite aura
     this.drawEliteAura(ctx, bodyY);
 
-    // Lean forward posture (speed lines - more dynamic)
-    ctx.strokeStyle = 'rgba(170,160,74,0.3)';
+    // Plasma trail (speed lines - more dynamic)
+    ctx.strokeStyle = 'rgba(0,255,136,0.4)';
     ctx.lineWidth = 2;
     for (let i = 0; i < 3; i++) {
-      const lineOffset = Math.sin(this.walkCycle + i) * 3; // Animated speed lines
+      const lineOffset = Math.sin(this.walkCycle + i) * 3;
       ctx.beginPath();
       ctx.moveTo(this.x - this.size * 1.5 - i * 5, bodyY + lineOffset);
       ctx.lineTo(this.x - this.size * 2.5 - i * 5, bodyY + lineOffset);
       ctx.stroke();
     }
 
-    // Skinny body (athletic build) - lean forward
-    const leanAngle = 0.1; // Forward lean
+    // Sleek arrow-shaped hull
+    const leanAngle = 0.1; // Forward tilt for speed
     ctx.save();
     ctx.translate(this.x, bodyY);
     ctx.rotate(leanAngle);
@@ -306,10 +305,10 @@ class Zombie {
     ctx.fillStyle = color;
     ctx.fillRect(-this.size * 0.5, -this.size * 0.4, this.size, this.size * 1.4);
 
-    // Torn running shirt
-    ctx.fillStyle = '#888';
+    // Cockpit window
+    ctx.fillStyle = '#00ffff';
     ctx.fillRect(-this.size * 0.4, -this.size * 0.3, this.size * 0.8, this.size * 0.8);
-    // Rips in shirt
+    // Window frame
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -318,22 +317,22 @@ class Zombie {
     ctx.stroke();
     ctx.restore();
 
-    // Head (leaning forward) with wild shaking
-    ctx.fillStyle = '#c0c09a';
+    // Sharp nose cone
+    ctx.fillStyle = '#00ddaa';
     ctx.save();
     ctx.translate(this.x + this.size * 0.2, bodyY - this.size * 0.7);
-    ctx.rotate(this.headTilt * 1.5); // Wild head movement
+    ctx.rotate(this.headTilt * 1.5);
     ctx.beginPath();
     ctx.arc(0, 0, this.size * 0.45, 0, Math.PI * 2);
     ctx.fill();
 
-    // Wild eyes
-    ctx.fillStyle = '#f00';
+    // Navigation lights
+    ctx.fillStyle = '#0ff';
     ctx.fillRect(-this.size * 0.15, 0, 2, 3);
     ctx.fillRect(this.size * 0.05, 0, 2, 3);
     ctx.restore();
 
-    // Thin reaching arms (pumping motion)
+    // Twin plasma engines (animated thrust)
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
@@ -354,17 +353,15 @@ class Zombie {
   }
 
   drawExplosive(ctx) {
-    // EXPLOSIVE - Bloated pulsing body
-    const color = this.elite ? '#0ff' : '#993333';
+    // EXPLOSIVE - Reactor Vessel (unstable energy core)
+    const color = this.elite ? '#0ff' : '#ff6600';
     const pulse = Math.sin(performance.now() / 150) * 0.15;
     const bodyY = this.y + this.walkBob;
 
     // Elite aura
     this.drawEliteAura(ctx, bodyY);
 
-    // Explosive warning glow removed - using particles instead
-
-    // Bloated body (bigger) with wobble
+    // Spherical containment hull (bigger) with wobble
     ctx.fillStyle = color;
     ctx.save();
     ctx.translate(this.x, bodyY);
@@ -374,8 +371,8 @@ class Zombie {
     ctx.fill();
     ctx.restore();
 
-    // Pulsing red veins (warning)
-    ctx.strokeStyle = `rgba(255,0,0,${0.7 + pulse})`;
+    // Pulsing energy conduits (warning)
+    ctx.strokeStyle = `rgba(255,102,0,${0.7 + pulse})`;
     ctx.lineWidth = 2;
     for (let i = 0; i < 4; i++) {
       const angle = (Math.PI * 2 / 4) * i;
@@ -388,7 +385,7 @@ class Zombie {
       ctx.stroke();
     }
 
-    // Bulging weak spots (glowing)
+    // Unstable reactor core (glowing)
     ctx.fillStyle = `rgba(255,255,0,${0.6 + pulse})`;
     ctx.beginPath();
     ctx.arc(this.x - this.size * 0.4, bodyY, this.size * 0.3, 0, Math.PI * 2);
@@ -397,8 +394,8 @@ class Zombie {
     ctx.arc(this.x + this.size * 0.4, bodyY, this.size * 0.3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Small head with shake
-    ctx.fillStyle = '#c08080';
+    // Central reactor window
+    ctx.fillStyle = '#ffaa00';
     ctx.save();
     ctx.translate(this.x, bodyY - this.size * 0.8);
     ctx.rotate(this.headTilt);
@@ -406,13 +403,13 @@ class Zombie {
     ctx.arc(0, 0, this.size * 0.35, 0, Math.PI * 2);
     ctx.fill();
 
-    // Distressed eyes
-    ctx.fillStyle = '#fff';
+    // Warning lights
+    ctx.fillStyle = '#f00';
     ctx.fillRect(-4, 0, 2, 4);
     ctx.fillRect(2, 0, 2, 4);
     ctx.restore();
 
-    // Unstable arms (with walk swing + random twitch)
+    // Stabilizer fins (with instability shake)
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     if (this.hasLeftArm) {
@@ -432,24 +429,22 @@ class Zombie {
   }
 
   drawHealer(ctx) {
-    // HEALER - Emaciated dripping body
-    const color = this.elite ? '#0ff' : '#66cccc';
+    // HEALER - Support Frigate (medical ship)
+    const color = this.elite ? '#0ff' : '#00ff66';
     const bodyY = this.y + this.walkBob;
 
     // Elite aura
     this.drawEliteAura(ctx, bodyY);
 
-    // Healer aura glow removed - using particles instead
-
-    // Skeletal thin body (hunched over)
+    // Cross-shaped medical hull
     ctx.fillStyle = color;
     ctx.save();
     ctx.translate(this.x, bodyY);
     ctx.rotate(this.headTilt * 0.2);
     ctx.fillRect(-this.size * 0.4, -this.size * 0.3, this.size * 0.8, this.size * 1.2);
 
-    // Visible ribs
-    ctx.strokeStyle = '#448888';
+    // Medical cross markings
+    ctx.strokeStyle = '#00ff00';
     ctx.lineWidth = 1;
     for (let i = 0; i < 4; i++) {
       ctx.beginPath();
@@ -458,7 +453,7 @@ class Zombie {
       ctx.stroke();
     }
 
-    // Glowing green pustules (healing source) - pulsing
+    // Healing beam emitters (glowing green) - pulsing
     ctx.fillStyle = '#0f0';
     ctx.beginPath();
     ctx.arc(-this.size * 0.3, 0, this.size * 0.2, 0, Math.PI * 2);
@@ -468,17 +463,17 @@ class Zombie {
     ctx.fill();
     ctx.restore();
 
-    // Gaunt head (with sway)
-    ctx.fillStyle = '#8ac8c8';
+    // Medical bay module (with sway)
+    ctx.fillStyle = '#44ffaa';
     ctx.save();
     ctx.translate(this.x, bodyY - this.size * 0.6);
-    ctx.rotate(this.headTilt * 0.8); // Droopy head sway
+    ctx.rotate(this.headTilt * 0.8);
     ctx.beginPath();
     ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Hollow eyes
-    ctx.fillStyle = '#000';
+    // Status indicators
+    ctx.fillStyle = '#00ff00';
     ctx.beginPath();
     ctx.arc(-3, 0, 2, 0, Math.PI * 2);
     ctx.fill();
@@ -487,7 +482,7 @@ class Zombie {
     ctx.fill();
     ctx.restore();
 
-    // Thin drooping arms (swaying)
+    // Medical supply pods (swaying)
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     if (this.hasLeftArm) {
@@ -503,7 +498,7 @@ class Zombie {
       ctx.stroke();
     }
 
-    // Dripping green ooze particles
+    // Healing energy particles
     if (Math.random() < 0.3) {
       ctx.fillStyle = 'rgba(0,255,100,0.6)';
       ctx.beginPath();
