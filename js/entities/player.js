@@ -382,68 +382,74 @@ class Player {
   }
 
   drawLightArmor(ctx, rank) {
-    // LEGS (with joints and boots)
-    const legY = this.y + this.size + this.idleOffset;
-    // Left leg
-    ctx.strokeStyle = '#2a5c2a';
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(this.x - this.size * 0.3, legY);
-    ctx.lineTo(this.x - this.size * 0.3, legY + this.size * 0.7);
-    ctx.stroke();
-    // Left boot
-    ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(this.x - this.size * 0.5, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
-
-    // Right leg
-    ctx.beginPath();
-    ctx.moveTo(this.x + this.size * 0.3, legY);
-    ctx.lineTo(this.x + this.size * 0.3, legY + this.size * 0.7);
-    ctx.stroke();
-    // Right boot
-    ctx.fillRect(this.x, legY + this.size * 0.7, this.size * 0.5, this.size * 0.3);
-
-    // TORSO (tactical vest with armor plates)
+    // SPACESHIP - Player's ship
     const bodyY = this.y + this.idleOffset;
-    // Main body
-    ctx.fillStyle = '#228b22';
-    ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 1.4, this.size * 1.5);
 
-    // Armor vest (dark green)
-    ctx.fillStyle = '#1a5c1a';
-    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.3, this.size * 1.2, this.size * 1.2);
+    // Engine thrusters (animated glow)
+    const thrustGlow = Math.sin(performance.now() / 100) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(0, 200, 255, ${thrustGlow})`;
+    // Left engine
+    ctx.fillRect(this.x - this.size * 0.9, bodyY + this.size * 0.9, this.size * 0.4, this.size * 0.6);
+    // Right engine
+    ctx.fillRect(this.x + this.size * 0.5, bodyY + this.size * 0.9, this.size * 0.4, this.size * 0.6);
 
-    // Armor plates (3 segments)
-    ctx.fillStyle = '#0a3c0a';
-    for (let i = 0; i < 3; i++) {
-      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.2 + i * this.size * 0.35, this.size, this.size * 0.3);
-    }
-
-    // Belt
-    ctx.fillStyle = '#654321';
-    ctx.fillRect(this.x - this.size * 0.7, bodyY + this.size * 0.7, this.size * 1.4, this.size * 0.2);
-    // Belt buckle
-    ctx.fillStyle = '#888';
-    ctx.fillRect(this.x - this.size * 0.2, bodyY + this.size * 0.7, this.size * 0.4, this.size * 0.2);
-
-    // SHOULDERS (armor pads)
-    ctx.fillStyle = '#1a5c1a';
-    // Left shoulder
+    // Wings
+    ctx.fillStyle = '#0066cc';
+    // Left wing
     ctx.beginPath();
-    ctx.arc(this.x - this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.moveTo(this.x - this.size, bodyY);
+    ctx.lineTo(this.x - this.size * 0.5, bodyY - this.size * 0.3);
+    ctx.lineTo(this.x - this.size * 0.5, bodyY + this.size);
+    ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = '#0a3c0a';
+    ctx.strokeStyle = '#0088ff';
     ctx.lineWidth = 2;
     ctx.stroke();
-    // Right shoulder
+
+    // Right wing
     ctx.beginPath();
-    ctx.arc(this.x + this.size * 0.8, bodyY - this.size * 0.4, this.size * 0.4, 0, Math.PI * 2);
+    ctx.moveTo(this.x + this.size, bodyY);
+    ctx.lineTo(this.x + this.size * 0.5, bodyY - this.size * 0.3);
+    ctx.lineTo(this.x + this.size * 0.5, bodyY + this.size);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // HEAD (helmet with visor)
-    this.drawHelmet(ctx, bodyY, '#2d5c2d', '#1a3c1a', rank);
+    // Main hull (body)
+    ctx.fillStyle = '#0088ff';
+    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.5, this.size, this.size * 1.6);
+
+    // Hull details
+    ctx.fillStyle = '#0066cc';
+    ctx.fillRect(this.x - this.size * 0.4, bodyY - this.size * 0.3, this.size * 0.8, this.size * 1.2);
+
+    // Cockpit window
+    ctx.fillStyle = '#00ffff';
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY - this.size * 0.3, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0088ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Energy core
+    const pulseSize = Math.sin(performance.now() / 150) * 0.1 + 0.9;
+    ctx.fillStyle = `rgba(0, 255, 255, ${thrustGlow})`;
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY + this.size * 0.5, this.size * 0.3 * pulseSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nose cone
+    ctx.fillStyle = '#0099ff';
+    ctx.beginPath();
+    ctx.moveTo(this.x, bodyY - this.size * 1.2);
+    ctx.lineTo(this.x - this.size * 0.5, bodyY - this.size * 0.5);
+    ctx.lineTo(this.x + this.size * 0.5, bodyY - this.size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   colorToRgb(color) {

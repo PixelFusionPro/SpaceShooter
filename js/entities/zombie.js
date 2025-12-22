@@ -201,25 +201,25 @@ class Zombie {
       ctx.stroke();
     }
 
-    // Health bar
+    // Shield bar
     const barW = this.size * 2.5;
     const barH = 8;
     const ratio = Math.max(0, this.health / this.maxHealth);
     const bx = this.x - barW / 2;
     const by = this.y - this.size * 1.5 - 15;
-    ctx.fillStyle = '#300';
+    ctx.fillStyle = '#001122';
     ctx.fillRect(bx, by, barW, barH);
-    ctx.fillStyle = '#f00';
+    ctx.fillStyle = '#ff00ff';
     ctx.fillRect(bx, by, barW * ratio, barH);
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = '#0ff';
     ctx.lineWidth = 2;
     ctx.strokeRect(bx, by, barW, barH);
 
     // BOSS label
-    ctx.fillStyle = '#ff0000';
+    ctx.fillStyle = '#ff00ff';
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('💀 BOSS 💀', this.x, by - 8);
+    ctx.fillText('👾 BOSS 👾', this.x, by - 8);
   }
 
   drawTank(ctx) {
@@ -515,40 +515,40 @@ class Zombie {
   }
 
   drawNormal(ctx) {
-    // NORMAL - Shambling office worker
-    const color = this.elite ? '#0ff' : '#6b8e23';
+    // NORMAL - Basic alien scout ship
+    const color = this.elite ? '#0ff' : '#4488ff';
     const bodyY = this.y + this.walkBob;
 
     // Elite aura
     this.drawEliteAura(ctx, bodyY);
 
-    // Torn shirt/tie
-    ctx.fillStyle = '#555';
+    // Main hull
+    ctx.fillStyle = '#334466';
     ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.3, this.size, this.size * 1.2);
-    // Tie hanging
-    ctx.fillStyle = '#900';
+    // Energy core
+    ctx.fillStyle = '#0088ff';
     ctx.fillRect(this.x - this.size * 0.1, bodyY - this.size * 0.2, this.size * 0.2, this.size * 0.8);
 
-    // Body
+    // Ship body
     ctx.fillStyle = color;
     ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.5, this.size * 1.2, this.size * 1.4);
 
-    // Head (tilted + shamble sway)
-    ctx.fillStyle = '#90a070';
+    // Cockpit
+    ctx.fillStyle = '#6699ff';
     ctx.save();
     ctx.translate(this.x, bodyY - this.size * 0.6);
-    ctx.rotate(0.3 + this.headTilt); // Base tilt + shamble sway
+    ctx.rotate(0.3 + this.headTilt);
     ctx.beginPath();
     ctx.arc(0, 0, this.size * 0.45, 0, Math.PI * 2);
     ctx.fill();
 
-    // Dead eyes
-    ctx.fillStyle = '#fff';
+    // Engine lights
+    ctx.fillStyle = '#0ff';
     ctx.fillRect(-4, 0, 2, 2);
     ctx.fillRect(2, 0, 2, 2);
     ctx.restore();
 
-    // Regular arms (shambling swing)
+    // Wing thrusters
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     if (this.hasLeftArm) {
@@ -564,9 +564,9 @@ class Zombie {
       ctx.stroke();
     }
 
-    // Hat variant
+    // Antenna variant
     if (this.variant === 'hat') {
-      ctx.fillStyle = '#222';
+      ctx.fillStyle = '#0088ff';
       ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.95, this.size, 4);
       ctx.fillRect(this.x - this.size * 0.3, bodyY - this.size * 1.1, this.size * 0.6, 6);
     }
@@ -575,7 +575,7 @@ class Zombie {
   }
 
   drawHealthBar(ctx) {
-    // Health bar (bold for mobile)
+    // Shield bar (bold for mobile)
     const barW = this.size * 2;
     const barH = 5;
     const ratio = Math.max(0, this.health / this.maxHealth);
@@ -583,21 +583,21 @@ class Zombie {
     const by = this.y - this.size * 1.3 - 10;
 
     // Background
-    ctx.fillStyle = '#300';
+    ctx.fillStyle = '#001122';
     ctx.fillRect(bx, by, barW, barH);
 
-    // Health (color changes)
+    // Shield energy (color changes)
     if (ratio > 0.6) {
-      ctx.fillStyle = '#0f0';
+      ctx.fillStyle = '#0ff';
     } else if (ratio > 0.3) {
-      ctx.fillStyle = '#ff0';
+      ctx.fillStyle = '#00aaff';
     } else {
-      ctx.fillStyle = '#f00';
+      ctx.fillStyle = '#ff00ff';
     }
     ctx.fillRect(bx, by, barW * ratio, barH);
 
     // Border
-    ctx.strokeStyle = '#000';
+    ctx.strokeStyle = '#0088ff';
     ctx.lineWidth = 1;
     ctx.strokeRect(bx, by, barW, barH);
   }
