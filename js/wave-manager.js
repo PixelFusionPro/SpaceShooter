@@ -74,9 +74,9 @@ class WaveManager {
 
       // Scale difficulty
       enemy.speed *= difficulty;
-      enemy.health = Math.ceil(zombie.health * difficulty);
+      enemy.health = Math.ceil(enemy.health * difficulty);
       enemy.maxHealth = enemy.health;
-      enemies.push(zombie);
+      enemies.push(enemy);
     }
 
     // Boss spawn every 5 waves
