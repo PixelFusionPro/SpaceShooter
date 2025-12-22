@@ -756,7 +756,8 @@ class SpaceShooterGame {
       this.powerupManager.isShieldActive()
     );
 
-    if (damage > 0 && !isDying) {
+    // Apply damage only if not dying AND spawn animation is complete
+    if (damage > 0 && !isDying && this.player.spawnProgress >= 1) {
       this.player.health -= damage;
       this.player.takeHit();
       this.flashDamage();
@@ -806,6 +807,9 @@ class SpaceShooterGame {
           this.player.health = Math.min(maxHealth, this.player.health + regenRate);
           this.lastRegenTime = now;
         }
+      } else if (this.player.health >= maxHealth) {
+        // Keep timer current when at max health
+        this.lastRegenTime = now;
       }
       // Cap health at current max
       this.player.health = Math.min(maxHealth, this.player.health);
@@ -1022,9 +1026,16 @@ class SpaceShooterGame {
     // Update health bar if element exists
     if (this.healthFill) {
       this.healthFill.style.width = Math.max(0, healthPercent) + '%';
-      
-      // Health bar color based on health level
-      if (healthPercent > 60) {
+
+      // Check if shield is active
+      const isShieldActive = this.powerupManager.isShieldActive();
+
+      // Health bar color based on shield status and health level
+      if (isShieldActive) {
+        // Shield active: cyan/blue with pulsing glow
+        this.healthFill.style.background = 'linear-gradient(90deg, #00ffff 0%, #00ccff 50%, #00ffff 100%)';
+        this.healthFill.style.boxShadow = '0 0 15px rgba(0, 255, 255, 0.9), 0 0 30px rgba(0, 255, 255, 0.6)';
+      } else if (healthPercent > 60) {
         this.healthFill.style.background = 'linear-gradient(90deg, #00ff00 0%, #7fff00 50%, #00ff00 100%)';
         this.healthFill.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.6), 0 0 20px rgba(0, 255, 0, 0.3)';
       } else if (healthPercent > 30) {

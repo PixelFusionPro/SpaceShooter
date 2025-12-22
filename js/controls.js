@@ -76,6 +76,13 @@ class Controls {
     if (this.keys['ArrowDown'] || this.keys['s'] || this.keys['S']) {
       player.vy = player.speed;
     }
+
+    // Normalize diagonal movement (prevent √2 speed bonus)
+    if (player.vx !== 0 && player.vy !== 0) {
+      const magnitude = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+      player.vx = (player.vx / magnitude) * player.speed;
+      player.vy = (player.vy / magnitude) * player.speed;
+    }
   }
 
   togglePause() {
