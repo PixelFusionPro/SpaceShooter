@@ -33,7 +33,7 @@ const CONFIG = {
 
   // Wave System
   WAVE: {
-    ZOMBIES_PER_WAVE_MULTIPLIER: 4,
+    ENEMIES_PER_WAVE_MULTIPLIER: 4,
     BOSS_WAVE_INTERVAL: 5,
     DIFFICULTY_SCALING: 0.05, // 5% increase per wave
     RARE_SPAWN_EXPLOSIVE: 0.05,

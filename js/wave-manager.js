@@ -39,7 +39,7 @@ class WaveManager {
     // Show wave intro
     this.showWaveIntro();
 
-    let count = this.wave * CONFIG.WAVE.ZOMBIES_PER_WAVE_MULTIPLIER;
+    let count = this.wave * CONFIG.WAVE.ENEMIES_PER_WAVE_MULTIPLIER;
     let difficulty = 1 + (this.wave - 1) * CONFIG.WAVE.DIFFICULTY_SCALING;
 
     // Apply milestone difficulty spike

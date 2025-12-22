@@ -84,6 +84,19 @@ class ShopManager {
       return { success: false, message: 'Not enough coins' };
     }
 
+    // Check if companion already owned (before deducting currency)
+    if (item.type === 'companion' && this.inventoryManager.hasItem(itemId)) {
+      return { success: false, message: 'Companion already owned!' };
+    }
+
+    // Check if upgrade has reached max stacks
+    if (item.type === 'upgrade' && item.maxStacks) {
+      const currentQuantity = this.inventoryManager.getItemQuantity(itemId);
+      if (currentQuantity >= item.maxStacks) {
+        return { success: false, message: `Max stacks reached (${item.maxStacks})` };
+      }
+    }
+
     // Deduct currency
     this.scoreManager.addCurrency(-item.price);
 
@@ -127,15 +140,66 @@ class ShopManager {
       return { success: false, message: 'Item not in inventory' };
     }
 
-    // Apply effect
-    if (item.effect.heal) {
-      player.health = Math.min(CONFIG.PLAYER.MAX_HEALTH, player.health + item.effect.heal);
+    // Initialize active effects array if not exists
+    if (!this.activeEffects) {
+      this.activeEffects = [];
+    }
+
+    const effect = item.effect;
+    const now = Date.now();
+
+    // Apply instant effects
+    if (effect.heal) {
+      const maxHealth = CONFIG.PLAYER.MAX_HEALTH + this.getEquippedStatBoosts().maxHealth;
+      player.health = Math.min(maxHealth, player.health + effect.heal);
+    }
+
+    // Apply temporary effects with duration
+    if (effect.duration && effect.duration > 0) {
+      const tempEffect = {
+        id: itemId,
+        name: item.name,
+        expiresAt: now + effect.duration,
+        stats: {}
+      };
+
+      // Map effect properties to stat boosts
+      if (effect.speed) tempEffect.stats.speed = effect.speed;
+      if (effect.fireRate) tempEffect.stats.fireRate = effect.fireRate;
+      if (effect.damage) tempEffect.stats.damage = effect.damage;
+      if (effect.regenRate) tempEffect.stats.regenRate = effect.regenRate;
+      if (effect.maxHealth) tempEffect.stats.maxHealth = effect.maxHealth;
+      if (effect.multishot) tempEffect.stats.multishot = effect.multishot;
+      if (effect.piercing) tempEffect.stats.piercing = effect.piercing;
+      if (effect.explosive) tempEffect.stats.explosive = effect.explosive;
+      if (effect.scoreMultiplier) tempEffect.stats.scoreMultiplier = effect.scoreMultiplier;
+      if (effect.coinMultiplier) tempEffect.stats.coinMultiplier = effect.coinMultiplier;
+      if (effect.critChance) tempEffect.stats.critChance = effect.critChance;
+      if (effect.critMultiplier) tempEffect.stats.critMultiplier = effect.critMultiplier;
+      if (effect.lifesteal) tempEffect.stats.lifesteal = effect.lifesteal;
+      if (effect.shield) tempEffect.stats.shield = true;
+
+      // Add to active effects
+      this.activeEffects.push(tempEffect);
     }
 
     // Remove from inventory
     this.inventoryManager.removeItem(itemId, 1);
 
     return { success: true, message: `Used ${item.name}!` };
+  }
+
+  // Get active temporary effects
+  getActiveEffects() {
+    if (!this.activeEffects) {
+      this.activeEffects = [];
+    }
+
+    // Remove expired effects
+    const now = Date.now();
+    this.activeEffects = this.activeEffects.filter(effect => effect.expiresAt > now);
+
+    return this.activeEffects;
   }
 
   // Get stat boosts from equipped items and upgrades
@@ -201,6 +265,24 @@ class ShopManager {
           }
         }
       }
+    });
+
+    // Apply active temporary effects from consumables
+    const activeEffects = this.getActiveEffects();
+    activeEffects.forEach(effect => {
+      if (effect.stats.speed) boosts.speed *= effect.stats.speed;
+      if (effect.stats.fireRate) boosts.fireRate *= effect.stats.fireRate;
+      if (effect.stats.damage) boosts.damage += effect.stats.damage;
+      if (effect.stats.regenRate) boosts.regenRate *= effect.stats.regenRate;
+      if (effect.stats.maxHealth) boosts.maxHealth += effect.stats.maxHealth;
+      if (effect.stats.multishot) boosts.multishot += effect.stats.multishot;
+      if (effect.stats.piercing) boosts.piercing += effect.stats.piercing;
+      if (effect.stats.scoreMultiplier) boosts.scoreMultiplier *= effect.stats.scoreMultiplier;
+      if (effect.stats.coinMultiplier) boosts.coinMultiplier *= effect.stats.coinMultiplier;
+      if (effect.stats.critChance) boosts.critChance += effect.stats.critChance;
+      if (effect.stats.critMultiplier) boosts.critMultiplier += effect.stats.critMultiplier;
+      if (effect.stats.lifesteal) boosts.lifesteal += effect.stats.lifesteal;
+      if (effect.stats.shield) boosts.shield = true;
     });
 
     return boosts;

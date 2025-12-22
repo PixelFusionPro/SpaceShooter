@@ -788,6 +788,7 @@ const SHOP_ITEMS = {
     price: 100,
     statBoost: { maxHealth: 5 },
     stackable: true,
+    maxStacks: 50,
     tier: 1
   },
   'upgrade_fire_rate': {
@@ -799,6 +800,7 @@ const SHOP_ITEMS = {
     price: 150,
     statBoost: { fireRate: 0.9 },
     stackable: true,
+    maxStacks: 10,
     tier: 1
   },
   'upgrade_speed': {
@@ -810,6 +812,7 @@ const SHOP_ITEMS = {
     price: 120,
     statBoost: { speed: 1.1 },
     stackable: true,
+    maxStacks: 10,
     tier: 1
   },
   'upgrade_damage': {
@@ -821,6 +824,7 @@ const SHOP_ITEMS = {
     price: 180,
     statBoost: { damage: 1 },
     stackable: true,
+    maxStacks: 20,
     tier: 1
   },
   // TIER 2 (Early-Mid Game - Good)
@@ -833,6 +837,7 @@ const SHOP_ITEMS = {
     price: 350,
     statBoost: { maxHealth: 10 },
     stackable: true,
+    maxStacks: 50,
     tier: 2
   },
   'upgrade_fire_rate_plus': {
@@ -844,6 +849,7 @@ const SHOP_ITEMS = {
     price: 450,
     statBoost: { fireRate: 0.85 },
     stackable: true,
+    maxStacks: 10,
     tier: 2
   },
   'upgrade_regen': {
@@ -853,8 +859,9 @@ const SHOP_ITEMS = {
     icon: '💚',
     description: 'Permanently increase regen rate by 20%',
     price: 400,
-    statBoost: { regenRate: 0.8 },
+    statBoost: { regenRate: 1.2 },
     stackable: true,
+    maxStacks: 10,
     tier: 2
   },
   'upgrade_speed_plus': {
@@ -866,6 +873,7 @@ const SHOP_ITEMS = {
     price: 380,
     statBoost: { speed: 1.15 },
     stackable: true,
+    maxStacks: 10,
     tier: 2
   },
   'upgrade_coin_gain': {
@@ -877,6 +885,7 @@ const SHOP_ITEMS = {
     price: 300,
     statBoost: { coinMultiplier: 1.1 },
     stackable: true,
+    maxStacks: 20,
     tier: 2
   },
   // TIER 3 (Mid Game - Great)
@@ -889,6 +898,7 @@ const SHOP_ITEMS = {
     price: 600,
     statBoost: { damage: 2 },
     stackable: true,
+    maxStacks: 20,
     tier: 3
   },
   'upgrade_multishot': {
@@ -900,6 +910,7 @@ const SHOP_ITEMS = {
     price: 650,
     statBoost: { multishot: 1 },
     stackable: true,
+    maxStacks: 5,
     tier: 3
   },
   'upgrade_regen_plus': {
@@ -909,8 +920,9 @@ const SHOP_ITEMS = {
     icon: '💚',
     description: 'Permanently increase regen rate by 30%',
     price: 700,
-    statBoost: { regenRate: 0.7 },
+    statBoost: { regenRate: 1.3 },
     stackable: true,
+    maxStacks: 10,
     tier: 3
   },
   'upgrade_score_multiplier': {
@@ -922,6 +934,7 @@ const SHOP_ITEMS = {
     price: 550,
     statBoost: { scoreMultiplier: 1.15 },
     stackable: true,
+    maxStacks: 20,
     tier: 3
   },
   'upgrade_crit_chance': {
@@ -933,6 +946,7 @@ const SHOP_ITEMS = {
     price: 750,
     statBoost: { critChance: 0.1, critMultiplier: 2 },
     stackable: true,
+    maxStacks: 10,
     tier: 3
   },
   // TIER 4 (Mid-Late Game - Excellent)
@@ -945,6 +959,7 @@ const SHOP_ITEMS = {
     price: 1500,
     statBoost: { multishot: 2 },
     stackable: true,
+    maxStacks: 5,
     tier: 4
   },
   'upgrade_crit_damage': {
@@ -956,6 +971,7 @@ const SHOP_ITEMS = {
     price: 1200,
     statBoost: { critMultiplier: 0.5 },
     stackable: true,
+    maxStacks: 10,
     tier: 4
   },
   'upgrade_coin_gain_plus': {
@@ -967,6 +983,7 @@ const SHOP_ITEMS = {
     price: 1000,
     statBoost: { coinMultiplier: 1.2 },
     stackable: true,
+    maxStacks: 20,
     tier: 4
   },
   'upgrade_piercing': {
@@ -978,6 +995,7 @@ const SHOP_ITEMS = {
     price: 1300,
     statBoost: { piercing: 1 },
     stackable: true,
+    maxStacks: 10,
     tier: 4
   },
   // TIER 5 (Late Game - Ultimate)
@@ -990,6 +1008,7 @@ const SHOP_ITEMS = {
     price: 2000,
     statBoost: { scoreMultiplier: 1.25 },
     stackable: true,
+    maxStacks: 20,
     tier: 5
   },
   'upgrade_armor_pierce': {
@@ -1001,6 +1020,7 @@ const SHOP_ITEMS = {
     price: 2500,
     statBoost: { armorPen: 0.2 },
     stackable: true,
+    maxStacks: 10,
     tier: 5
   },
   'upgrade_lifesteal': {
@@ -1012,6 +1032,7 @@ const SHOP_ITEMS = {
     price: 3000,
     statBoost: { lifesteal: 0.05 },
     stackable: true,
+    maxStacks: 10,
     tier: 5
   },
   // TIER 6 (End Game - Legendary)
@@ -1024,6 +1045,7 @@ const SHOP_ITEMS = {
     price: 8000,
     statBoost: { lifesteal: 0.1 },
     stackable: true,
+    maxStacks: 10,
     tier: 6
   },
 
@@ -1140,7 +1162,7 @@ const SHOP_ITEMS = {
     name: 'Sniper Rounds (Basic)',
     type: 'ammunition',
     icon: '🔸',
-    description: 'Basic sniper rounds, +1 damage, pierces pierces 1 enemy enemy',
+    description: 'Basic sniper rounds, +1 damage, pierces 1 enemy',
     price: 40,
     packSize: 50,
     tier: 1,
@@ -1157,7 +1179,7 @@ const SHOP_ITEMS = {
     name: 'Sniper Rounds (Enhanced)',
     type: 'ammunition',
     icon: '🔹',
-    description: 'Enhanced sniper rounds, +2 damage, pierces pierces 2 enemy enemys',
+    description: 'Enhanced sniper rounds, +2 damage, pierces 2 enemies',
     price: 100,
     packSize: 50,
     tier: 2,
@@ -1174,7 +1196,7 @@ const SHOP_ITEMS = {
     name: 'Sniper Rounds (Advanced)',
     type: 'ammunition',
     icon: '💎',
-    description: 'Advanced sniper rounds, +3 damage, pierces pierces 3 enemy enemys',
+    description: 'Advanced sniper rounds, +3 damage, pierces 3 enemies',
     price: 250,
     packSize: 50,
     tier: 3,
@@ -1301,7 +1323,7 @@ const SHOP_ITEMS = {
     name: 'Piercing Rounds (T1)',
     type: 'ammunition',
     icon: '⚡',
-    description: '+1 damage, pierces pierces 2 enemy enemys',
+    description: '+1 damage, pierces 2 enemies',
     price: 120,
     packSize: 40,
     tier: 2,
@@ -1318,7 +1340,7 @@ const SHOP_ITEMS = {
     name: 'Piercing Rounds (T2)',
     type: 'ammunition',
     icon: '⚡',
-    description: '+2 damage, pierces pierces 3 enemy enemys',
+    description: '+2 damage, pierces 3 enemies',
     price: 350,
     packSize: 40,
     tier: 4,
@@ -1336,7 +1358,7 @@ const SHOP_ITEMS = {
     name: 'Piercing Rounds (T3)',
     type: 'ammunition',
     icon: '⚡',
-    description: '+3 damage, pierces pierces 5 enemy enemys',
+    description: '+3 damage, pierces 5 enemies',
     price: 900,
     packSize: 40,
     tier: 5,
@@ -1483,7 +1505,7 @@ const SHOP_ITEMS = {
     name: 'Electric Rounds (T2)',
     type: 'ammunition',
     icon: '⚡',
-    description: '+2 damage, chains to 2 nearby enemys',
+    description: '+2 damage, chains to 2 nearby enemies',
     price: 450,
     packSize: 35,
     tier: 4,
@@ -1501,7 +1523,7 @@ const SHOP_ITEMS = {
     name: 'Electric Rounds (T3)',
     type: 'ammunition',
     icon: '⚡',
-    description: '+3 damage, chains to 3 nearby enemys',
+    description: '+3 damage, chains to 3 nearby enemies',
     price: 1200,
     packSize: 35,
     tier: 5,
@@ -1742,6 +1764,10 @@ const SHOP_ITEMS = {
   },
 
   // Fortress Structures - Defensive buildings
+  // NOTE: Fortress items commented out - they auto-unlock at wave milestones
+  // Wave 5: Fence, Wave 15: Barricades, Wave 30: Gates, Wave 50: Walls, Wave 75: Towers
+  // Players can upgrade existing structures in the Fortress menu instead
+  /*
   'fortress_fence': {
     id: 'fortress_fence',
     name: 'Wooden Fence',
@@ -1792,6 +1818,7 @@ const SHOP_ITEMS = {
     price: 3000,
     tier: 5
   }
+  */
 };
 
 // Export for use in shop-manager.js
