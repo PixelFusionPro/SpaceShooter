@@ -55,7 +55,14 @@ class AchievementManager {
       bulletsUsed: 0,
       criticalHits: 0,
       coinsEarned: 0,
-      coinsSpent: 0
+      coinsSpent: 0,
+      // Fortress stats
+      structuresBuilt: 0,
+      towerKills: 0,
+      damageBlocked: 0,
+      maxUpgradeLevel: 0,
+      structuresRepaired: 0,
+      fortressCoinsSpent: 0
     };
   }
 
@@ -500,6 +507,98 @@ class AchievementManager {
         tier: 'gold',
         requirement: { type: 'companionsUnlocked', value: 8 },
         reward: { coins: 1000, statBoost: { fireRate: 0.1 } }
+      },
+
+      // === FORTRESS ACHIEVEMENTS (10) ===
+      'first_builder': {
+        id: 'first_builder',
+        title: 'First Builder',
+        description: 'Build your first fortress structure',
+        category: 'fortress',
+        tier: 'bronze',
+        requirement: { type: 'structuresBuilt', value: 1 },
+        reward: { coins: 100, statBoost: null }
+      },
+      'master_builder': {
+        id: 'master_builder',
+        title: 'Master Builder',
+        description: 'Build 10 fortress structures',
+        category: 'fortress',
+        tier: 'silver',
+        requirement: { type: 'structuresBuilt', value: 10 },
+        reward: { coins: 300, statBoost: null }
+      },
+      'fortress_architect': {
+        id: 'fortress_architect',
+        title: 'Fortress Architect',
+        description: 'Build 25 fortress structures',
+        category: 'fortress',
+        tier: 'gold',
+        requirement: { type: 'structuresBuilt', value: 25 },
+        reward: { coins: 800, statBoost: { maxHealth: 10 } }
+      },
+      'tower_defense': {
+        id: 'tower_defense',
+        title: 'Tower Defense',
+        description: 'Towers kill 100 enemies',
+        category: 'fortress',
+        tier: 'silver',
+        requirement: { type: 'towerKills', value: 100 },
+        reward: { coins: 400, statBoost: null }
+      },
+      'tower_master': {
+        id: 'tower_master',
+        title: 'Tower Master',
+        description: 'Towers kill 500 enemies',
+        category: 'fortress',
+        tier: 'gold',
+        requirement: { type: 'towerKills', value: 500 },
+        reward: { coins: 1000, statBoost: { damage: 1 } }
+      },
+      'fortress_stands': {
+        id: 'fortress_stands',
+        title: 'The Fortress Stands',
+        description: 'Block 10,000 total damage with structures',
+        category: 'fortress',
+        tier: 'gold',
+        requirement: { type: 'damageBlocked', value: 10000 },
+        reward: { coins: 1200, statBoost: { maxHealth: 15 } }
+      },
+      'upgrade_master': {
+        id: 'upgrade_master',
+        title: 'Upgrade Master',
+        description: 'Upgrade a structure type to level 5',
+        category: 'fortress',
+        tier: 'silver',
+        requirement: { type: 'maxUpgradeLevel', value: 5 },
+        reward: { coins: 500, statBoost: null }
+      },
+      'fortress_legend': {
+        id: 'fortress_legend',
+        title: 'Fortress Legend',
+        description: 'Upgrade a structure type to level 10',
+        category: 'fortress',
+        tier: 'gold',
+        requirement: { type: 'maxUpgradeLevel', value: 10 },
+        reward: { coins: 1500, statBoost: { maxHealth: 20 } }
+      },
+      'repair_specialist': {
+        id: 'repair_specialist',
+        title: 'Repair Specialist',
+        description: 'Repair structures 50 times',
+        category: 'fortress',
+        tier: 'silver',
+        requirement: { type: 'structuresRepaired', value: 50 },
+        reward: { coins: 400, statBoost: null }
+      },
+      'fortress_veteran': {
+        id: 'fortress_veteran',
+        title: 'Fortress Veteran',
+        description: 'Spend 10,000 coins on fortress upgrades',
+        category: 'fortress',
+        tier: 'gold',
+        requirement: { type: 'fortressCoinsSpent', value: 10000 },
+        reward: { coins: 2000, statBoost: { coinMultiplier: 0.05 } }
       }
     };
   }
@@ -565,6 +664,42 @@ class AchievementManager {
   // Track game played
   trackGamePlayed() {
     this.stats.gamesPlayed++;
+    this.saveAchievements();
+  }
+
+  // Track structure built
+  trackStructureBuilt() {
+    this.stats.structuresBuilt++;
+    this.saveAchievements();
+  }
+
+  // Track tower kill
+  trackTowerKill() {
+    this.stats.towerKills++;
+  }
+
+  // Track damage blocked by structures
+  trackDamageBlocked(amount) {
+    this.stats.damageBlocked += amount;
+  }
+
+  // Track structure upgrade level
+  trackUpgradeLevel(level) {
+    if (level > this.stats.maxUpgradeLevel) {
+      this.stats.maxUpgradeLevel = level;
+      this.saveAchievements();
+    }
+  }
+
+  // Track structure repair
+  trackStructureRepair() {
+    this.stats.structuresRepaired++;
+    this.saveAchievements();
+  }
+
+  // Track fortress coins spent
+  trackFortressCoinsSpent(amount) {
+    this.stats.fortressCoinsSpent += amount;
     this.saveAchievements();
   }
 
@@ -634,6 +769,24 @@ class AchievementManager {
           break;
         case 'wavesCompleted':
           requirementMet = this.stats.wavesCompleted >= req.value;
+          break;
+        case 'structuresBuilt':
+          requirementMet = this.stats.structuresBuilt >= req.value;
+          break;
+        case 'towerKills':
+          requirementMet = this.stats.towerKills >= req.value;
+          break;
+        case 'damageBlocked':
+          requirementMet = this.stats.damageBlocked >= req.value;
+          break;
+        case 'maxUpgradeLevel':
+          requirementMet = this.stats.maxUpgradeLevel >= req.value;
+          break;
+        case 'structuresRepaired':
+          requirementMet = this.stats.structuresRepaired >= req.value;
+          break;
+        case 'fortressCoinsSpent':
+          requirementMet = this.stats.fortressCoinsSpent >= req.value;
           break;
       }
 

@@ -190,33 +190,47 @@ function renderFortressStructures() {
 function upgradeStructure(index) {
   const fortressManager = getFortressManager();
   const scoreManager = getScoreManager();
-  
+
   if (!fortressManager || !scoreManager) {
     alert('Fortress system not available');
     return;
   }
-  
+
   const result = fortressManager.upgradeStructure(index);
   if (!result.success) {
     alert(result.message);
     return;
   }
-  
+
   const structure = result.structure;
   const cost = result.cost;
   const type = result.type;
-  
+
+  // Check if at max level
+  const currentLevel = fortressManager.getUpgradeLevel(type);
+  const maxLevel = CONFIG.FORTRESS.MAX_UPGRADE_LEVEL || 15;
+  if (currentLevel >= maxLevel) {
+    alert(`Maximum upgrade level reached (Level ${maxLevel + 1})!`);
+    return;
+  }
+
   if (scoreManager.currency < cost) {
     alert('Not enough coins!');
     return;
   }
-  
+
   // Deduct currency
   scoreManager.addCurrency(-cost);
-  
+
   // Upgrade the structure type (affects all structures of this type, including future ones)
-  const newLevel = fortressManager.getUpgradeLevel(type) + 1;
+  const newLevel = currentLevel + 1;
   fortressManager.setUpgradeLevel(type, newLevel);
+
+  // Track fortress coins spent for achievements
+  if (typeof Game !== 'undefined' && Game && Game.achievementManager) {
+    Game.achievementManager.trackFortressCoinsSpent(cost);
+    Game.achievementManager.trackUpgradeLevel(newLevel);
+  }
   
   // Update UI
   updateFortressCoins();
@@ -243,32 +257,45 @@ function upgradeStructure(index) {
 function upgradeStructureType(type) {
   const fortressManager = getFortressManager();
   const scoreManager = getScoreManager();
-  
+
   if (!fortressManager || !scoreManager) {
     alert('Fortress system not available');
     return;
   }
-  
+
   const result = fortressManager.upgradeStructureType(type);
   if (!result.success) {
     alert(result.message);
     return;
   }
-  
+
   const cost = result.cost;
   const currentLevel = result.currentLevel;
-  
+
+  // Check if at max level
+  const maxLevel = CONFIG.FORTRESS.MAX_UPGRADE_LEVEL || 15;
+  if (currentLevel >= maxLevel) {
+    alert(`Maximum upgrade level reached (Level ${maxLevel + 1})!`);
+    return;
+  }
+
   if (scoreManager.currency < cost) {
     alert('Not enough coins!');
     return;
   }
-  
+
   // Deduct currency
   scoreManager.addCurrency(-cost);
-  
+
   // Upgrade the structure type
   const newLevel = currentLevel + 1;
   fortressManager.setUpgradeLevel(type, newLevel);
+
+  // Track fortress coins spent for achievements
+  if (typeof Game !== 'undefined' && Game && Game.achievementManager) {
+    Game.achievementManager.trackFortressCoinsSpent(cost);
+    Game.achievementManager.trackUpgradeLevel(newLevel);
+  }
   
   // Update UI
   updateFortressCoins();

@@ -60,22 +60,31 @@ class FortressStructure {
   // Update tower shooting
   updateTowerShooting(now) {
     if (now - this.lastShotTime < this.fireRate) return;
-    
-    // Find nearest enemy in range
+
+    // Find best target using priority targeting
     const towerCenterX = this.x + this.width / 2;
     const towerCenterY = this.y + this.height / 2;
-    const target = this.enemyManager.findNearest(towerCenterX, towerCenterY);
-    
+    const target = this.findBestTarget(towerCenterX, towerCenterY);
+
     if (!target || target.dying) return;
-    
+
     const dx = target.x - towerCenterX;
     const dy = target.y - towerCenterY;
     const dist = Math.hypot(dx, dy);
-    
+
     if (dist > this.range) return;
-    
-    // Shoot at target
-    const angle = Math.atan2(dy, dx);
+
+    // Lead targeting for fast-moving enemies
+    const bulletSpeed = CONFIG.BULLET.SPEED;
+    const timeToImpact = dist / bulletSpeed;
+    const leadX = target.x + (target.dx || 0) * timeToImpact;
+    const leadY = target.y + (target.dy || 0) * timeToImpact;
+
+    // Calculate angle to lead position
+    const leadDx = leadX - towerCenterX;
+    const leadDy = leadY - towerCenterY;
+    const angle = Math.atan2(leadDy, leadDx);
+
     const bullet = this.bulletPool.get();
 
     if (bullet) {
@@ -85,12 +94,58 @@ class FortressStructure {
       bullet.color = '#ffaa00'; // Orange color for tower bullets
       bullet.trailColor = '#ff6600'; // Orange-red trail
       bullet.isPlayerBullet = true; // Mark as friendly bullet (prevents damaging player structures)
+      bullet.towerShot = true; // Mark as tower bullet for tracking
       this.lastShotTime = now;
     }
   }
 
+  // Find best target using priority system
+  findBestTarget(x, y) {
+    if (!this.enemyManager || !this.enemyManager.enemies) return null;
+
+    const enemiesInRange = [];
+
+    // Collect all enemies in range
+    for (const enemy of this.enemyManager.enemies) {
+      if (enemy.dying) continue;
+
+      const dx = enemy.x - x;
+      const dy = enemy.y - y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist <= this.range) {
+        enemiesInRange.push({ enemy, dist });
+      }
+    }
+
+    if (enemiesInRange.length === 0) return null;
+
+    // Priority targeting: Boss > Elite > Normal
+    // Within same priority, target closest
+    let bestTarget = null;
+    let bestPriority = -1;
+    let bestDist = Infinity;
+
+    for (const { enemy, dist } of enemiesInRange) {
+      let priority = 0;
+      if (enemy.type === 'boss') priority = 3;
+      else if (enemy.elite) priority = 2;
+      else priority = 1;
+
+      // Better target if higher priority, or same priority but closer
+      if (priority > bestPriority || (priority === bestPriority && dist < bestDist)) {
+        bestTarget = enemy;
+        bestPriority = priority;
+        bestDist = dist;
+      }
+    }
+
+    return bestTarget;
+  }
+
   takeDamage(amount) {
     const actualDamage = amount * (1 - this.damageResistance);
+    const damageBlocked = amount - actualDamage;
     this.health -= actualDamage;
 
     if (this.health <= 0) {
@@ -98,7 +153,8 @@ class FortressStructure {
       this.active = false;
     }
 
-    return actualDamage;
+    // Return both actual damage and blocked amount for tracking
+    return { actualDamage, damageBlocked };
   }
 
   repair(amount) {
@@ -386,22 +442,23 @@ class FortressStructure {
 }
 
 class FortressManager {
-  constructor(canvas) {
+  constructor(canvas, achievementManager = null) {
     this.canvas = canvas;
     this.structures = [];
     this.placementMode = false;
     this.placementType = null;
-    
-    // Track enemies that have passed through fences (zombie object -> Set of structure indices)
+    this.achievementManager = achievementManager;
+
+    // Track enemies that have passed through fences (enemy object -> Set of structure indices)
     this.enemiesPassedThrough = new WeakMap();
-    
-    // Track enemies that are blocked from fences (zombie object -> Set of structure indices)
+
+    // Track enemies that are blocked from fences (enemy object -> Set of structure indices)
     this.enemiesBlockedFrom = new WeakMap();
-    
+
     // References for tower shooting
     this.bulletPool = null;
     this.enemyManager = null;
-    
+
     // Load saved upgrade levels from localStorage
     this.loadUpgradeLevels();
   }
@@ -474,27 +531,33 @@ class FortressManager {
   // Add a structure to the fortress
   addStructure(type, x, y, width, height) {
     const structure = new FortressStructure(type, x, y, width, height);
-    
+
     // Set tower references if available
     if (type === 'tower') {
       structure.bulletPool = this.bulletPool;
       structure.enemyManager = this.enemyManager;
     }
-    
+
     // Apply saved upgrade level if it exists
     const savedLevel = this.getUpgradeLevel(type);
     if (savedLevel > 0) {
       structure.upgradeLevel = savedLevel;
       structure.maxHealth = structure.baseHealth + (savedLevel * structure.upgradeHealthBonus);
       structure.health = structure.maxHealth; // Start at full health
-      
+
       // Apply damage upgrade for towers
       if (type === 'tower') {
         structure.damage = structure.baseDamage + (savedLevel * structure.upgradeDamageBonus);
       }
     }
-    
+
     this.structures.push(structure);
+
+    // Track structure built for achievements
+    if (this.achievementManager) {
+      this.achievementManager.trackStructureBuilt();
+    }
+
     return structure;
   }
 
@@ -515,10 +578,10 @@ class FortressManager {
   // Handle enemy-structure collisions
   handleEnemyCollisions(enemies) {
     for (const enemy of enemies) {
-      if (zombie.dying) continue;
+      if (enemy.dying) continue;
 
       // Store original speed if not already stored
-      if (zombie.baseSpeed === undefined) {
+      if (enemy.baseSpeed === undefined) {
         enemy.baseSpeed = enemy.speed;
       }
 
@@ -529,13 +592,13 @@ class FortressManager {
       let passedStructures = this.enemiesPassedThrough.get(enemy);
       if (!passedStructures) {
         passedStructures = new Set();
-        this.enemiesPassedThrough.set(zombie, passedStructures);
+        this.enemiesPassedThrough.set(enemy, passedStructures);
       }
-      
+
       let blockedStructures = this.enemiesBlockedFrom.get(enemy);
       if (!blockedStructures) {
         blockedStructures = new Set();
-        this.enemiesBlockedFrom.set(zombie, blockedStructures);
+        this.enemiesBlockedFrom.set(enemy, blockedStructures);
       }
 
       let isColliding = false;
@@ -594,9 +657,9 @@ class FortressManager {
                 // Push enemy away from structure center
                 enemy.x += (dx / dist) * pushBackStrength;
                 enemy.y += (dy / dist) * pushBackStrength;
-                
+
                 // Additional push to ensure enemy is outside structure bounds
-                if (zombie.x + enemy.size > structure.x && enemy.x - enemy.size < structure.x + structure.width &&
+                if (enemy.x + enemy.size > structure.x && enemy.x - enemy.size < structure.x + structure.width &&
                     enemy.y + enemy.size > structure.y && enemy.y - enemy.size < structure.y + structure.height) {
                   // Enemy is still inside, push to nearest edge
                   const distToLeft = enemy.x - structure.x;
@@ -635,7 +698,12 @@ class FortressManager {
           // If canPassThrough is true (fence only), enemy passes through without being slowed or blocked
 
           // Damage structure from enemy contact (even if enemy passes through)
-          structure.takeDamage(CONFIG.ENEMIES.DAMAGE_PER_FRAME * 0.5);
+          const damageResult = structure.takeDamage(CONFIG.ENEMIES.DAMAGE_PER_FRAME * 0.5);
+
+          // Track damage blocked for achievements
+          if (this.achievementManager && damageResult.damageBlocked > 0) {
+            this.achievementManager.trackDamageBlocked(damageResult.damageBlocked);
+          }
         } else {
           // Enemy is not colliding with this structure, remove from tracking if it was
           // (but keep blocked status - once blocked, always blocked for this fence)

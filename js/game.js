@@ -73,7 +73,7 @@ class SpaceShooterGame {
     this.powerupManager = new PowerupManager(canvas, this.particleManager);
     this.waveManager = new WaveManager(canvas);
     this.enemyManager = new EnemyManager(canvas, this.particleManager);
-    this.fortressManager = new FortressManager(canvas);
+    this.fortressManager = new FortressManager(canvas, this.achievementManager);
 
     // Object pools for performance (must be created before companionManager)
     this.bulletPool = new ObjectPool(
@@ -358,20 +358,28 @@ class SpaceShooterGame {
 
     // Enemy killed
     if (enemy.health <= 0) {
-      this.handleEnemyKill(enemy, index);
+      this.handleEnemyKill(enemy, index, bullet);
     }
   }
 
-  handleEnemyKill(enemy, index) {
+  handleEnemyKill(enemy, index, bullet = null) {
     // Calculate hit angle for death animation
     const dx = enemy.x - this.player.x;
     const dy = enemy.y - this.player.y;
     const hitAngle = Math.atan2(dy, dx);
 
-    // Kill zombie (start death animation)
+    // Track tower kill if killed by tower bullet
+    const isTowerKill = bullet && bullet.towerShot;
+
+    // Kill enemy (start death animation)
     this.enemyManager.killEnemy(index, hitAngle, (killedEnemy) => {
       // Track kill in achievement manager
       this.achievementManager.trackKill(killedEnemy);
+
+      // Track tower kill separately
+      if (isTowerKill) {
+        this.achievementManager.trackTowerKill();
+      }
 
       // Track kill in statistics
       this.statisticsManager.trackKill();

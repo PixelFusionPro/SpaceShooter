@@ -145,11 +145,12 @@ const CONFIG = {
 
   // Fortress Structures
   FORTRESS: {
+    MAX_UPGRADE_LEVEL: 15, // Maximum upgrade level for all structures
     FENCE: {
       HEALTH: 150, // Increased from 50
-      SLOW_EFFECT: 0.3, // Slows zombies by 30%
+      SLOW_EFFECT: 0.3, // Slows enemies by 30%
       BLOCKAGE: 1.5, // Increased pushback strength to prevent passing through
-      DETERIORATION_RATE: 0.1, // HP lost per second
+      DETERIORATION_RATE: 0.05, // HP lost per second (reduced from 0.1)
       DAMAGE_RESISTANCE: 0.2, // Reduces incoming damage by 20%
       UPGRADE_COST: 100, // Cost to upgrade
       UPGRADE_HEALTH_BONUS: 50, // Additional health per upgrade level
@@ -158,7 +159,7 @@ const CONFIG = {
       HEALTH: 300, // Increased from 150
       SLOW_EFFECT: 0.5,
       BLOCKAGE: 2.0,
-      DETERIORATION_RATE: 0.05,
+      DETERIORATION_RATE: 0.03, // HP lost per second (reduced from 0.05)
       DAMAGE_RESISTANCE: 0.5,
       UPGRADE_COST: 300,
       UPGRADE_HEALTH_BONUS: 100,
@@ -167,7 +168,7 @@ const CONFIG = {
       HEALTH: 200, // Increased from 80
       SLOW_EFFECT: 0.4,
       BLOCKAGE: 1.5,
-      DETERIORATION_RATE: 0.2,
+      DETERIORATION_RATE: 0.08, // HP lost per second (reduced from 0.2)
       DAMAGE_RESISTANCE: 0.3,
       UPGRADE_COST: 200,
       UPGRADE_HEALTH_BONUS: 75,
@@ -176,7 +177,7 @@ const CONFIG = {
       HEALTH: 500, // Increased from 200
       SLOW_EFFECT: 0,
       BLOCKAGE: 3.0,
-      DETERIORATION_RATE: 0.02,
+      DETERIORATION_RATE: 0.01, // HP lost per second (reduced from 0.02)
       DAMAGE_RESISTANCE: 0.6,
       UPGRADE_COST: 500,
       UPGRADE_HEALTH_BONUS: 150,
@@ -190,7 +191,7 @@ const CONFIG = {
       HEALTH: 250, // Increased from 100
       SLOW_EFFECT: 0.2,
       BLOCKAGE: 1.0,
-      DETERIORATION_RATE: 0.08,
+      DETERIORATION_RATE: 0.04, // HP lost per second (reduced from 0.08)
       DAMAGE_RESISTANCE: 0.4,
       UPGRADE_COST: 250,
       UPGRADE_HEALTH_BONUS: 100,
