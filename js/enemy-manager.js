@@ -108,8 +108,8 @@ class EnemyManager {
         continue; // Skip normal update for dying enemies
       }
 
-      // Normal enemy update
-      const damage = enemy.update(playerX, playerY, shieldActive);
+      // Normal enemy update (pass all enemies for separation)
+      const damage = enemy.update(playerX, playerY, shieldActive, this.enemies);
       if (damage > 0) {
         totalDamage += damage;
       }
@@ -128,12 +128,13 @@ class EnemyManager {
         }
       }
 
-      // Boss minion spawning (with cap)
+      // Boss minion spawning (with cap and recount)
       if (enemy.type === 'boss' && Date.now() > enemy.nextMinionTime) {
-        // Initialize minion count if not set
-        if (typeof enemy.minionCount === 'undefined') {
-          enemy.minionCount = 0;
-        }
+        // Recount actual alive minions for accuracy
+        const actualMinions = this.enemies.filter(e =>
+          e.isBossMinion && e.parentBoss === enemy && !e.dying
+        ).length;
+        enemy.minionCount = actualMinions;
 
         // Only spawn if under cap
         if (enemy.minionCount < CONFIG.ENEMIES.BOSS.MAX_MINIONS) {
@@ -182,7 +183,7 @@ class EnemyManager {
 
           // Call hit callback with damage amount
           if (onHit) {
-            onHit(zombie, j, damageDealt);
+            onHit(enemy, j, damageDealt);
           }
           
           // Check if bullet can continue piercing
@@ -260,7 +261,7 @@ class EnemyManager {
 
   // Get count of alive (non-dying) enemies
   getAliveCount() {
-    return this.enemies.filter(z => !z.dying).length;
+    return this.enemies.filter(enemy => !enemy.dying).length;
   }
 
   // Get total enemy count (including dying)

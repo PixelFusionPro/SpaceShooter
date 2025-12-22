@@ -12,7 +12,31 @@ class EnemyShip {
     this.lastY = 0;
     this.stuckTimer = 0;
     this.elite = Math.random() < CONFIG.ENEMIES.ELITE_CHANCE;
-    this.variant = Math.random() < CONFIG.ENEMIES.VARIANT_CHANCE ? 'hat' : null;
+
+    // Variant system with gameplay effects
+    const variantRoll = Math.random();
+    if (variantRoll < 0.10) {
+      this.variant = 'armored'; // 10% chance: +50% health
+      this.health *= 1.5;
+      this.maxHealth = this.health;
+    } else if (variantRoll < 0.15) {
+      this.variant = 'fast'; // 5% chance: +30% speed
+      this.speed *= 1.3;
+      this.baseSpeed = this.speed;
+    } else if (variantRoll < 0.18) {
+      this.variant = 'regenerating'; // 3% chance: regenerates health
+      this.regenRate = 0.05; // Heals 0.05 HP per frame
+    } else {
+      this.variant = 'standard'; // 82% chance: normal
+    }
+
+    // Elite stat bonuses (50% more health, 20% more speed)
+    if (this.elite) {
+      this.health *= 1.5;
+      this.maxHealth = this.health;
+      this.speed *= 1.2;
+      this.baseSpeed = this.speed;
+    }
 
     // Damage/missing limbs (calculated once, not every frame)
     this.hasLeftArm = Math.random() > 0.25;
@@ -61,13 +85,39 @@ class EnemyShip {
     this.lastY = this.y;
   }
 
-  update(playerX, playerY, shieldActive) {
+  update(playerX, playerY, shieldActive, allEnemies = []) {
     const dx = playerX - this.x;
     const dy = playerY - this.y;
     const dist = Math.hypot(dx, dy);
 
-    this.x += (dx / dist) * this.speed;
-    this.y += (dy / dist) * this.speed;
+    // Only move if not already at player position (prevent division by zero)
+    if (dist > 0) {
+      this.x += (dx / dist) * this.speed;
+      this.y += (dy / dist) * this.speed;
+    }
+
+    // Enemy separation (prevent stacking)
+    for (const other of allEnemies) {
+      if (other === this || other.dying) continue;
+
+      const dx2 = this.x - other.x;
+      const dy2 = this.y - other.y;
+      const dist2 = Math.hypot(dx2, dy2);
+      const minDist = this.size + other.size;
+
+      if (dist2 > 0 && dist2 < minDist) {
+        // Push away from each other
+        const pushX = (dx2 / dist2) * (minDist - dist2) * 0.5;
+        const pushY = (dy2 / dist2) * (minDist - dist2) * 0.5;
+        this.x += pushX;
+        this.y += pushY;
+      }
+    }
+
+    // Regenerating variant: heal over time
+    if (this.variant === 'regenerating' && this.health < this.maxHealth) {
+      this.health = Math.min(this.maxHealth, this.health + this.regenRate);
+    }
 
     // Update walk animation (speed-based)
     const isMoving = Math.abs(this.x - this.lastX) > 0.1 || Math.abs(this.y - this.lastY) > 0.1;
@@ -102,12 +152,14 @@ class EnemyShip {
       return CONFIG.ENEMIES.DAMAGE_PER_FRAME; // Return damage dealt
     }
 
-    // Anti-stuck system
+    // Anti-stuck system (apply jitter instead of respawn)
     const moved = Math.hypot(this.x - this.lastX, this.y - this.lastY);
     if (moved < 0.5) {
       this.stuckTimer++;
       if (this.stuckTimer > CONFIG.ENEMIES.STUCK_THRESHOLD) {
-        this.spawnFromEdge();
+        // Apply random jitter to unstick
+        this.x += (Math.random() - 0.5) * 40;
+        this.y += (Math.random() - 0.5) * 40;
         this.stuckTimer = 0;
       }
     } else {
@@ -559,11 +611,32 @@ class EnemyShip {
       ctx.stroke();
     }
 
-    // Antenna variant
-    if (this.variant === 'hat') {
-      ctx.fillStyle = '#0088ff';
-      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.95, this.size, 4);
-      ctx.fillRect(this.x - this.size * 0.3, bodyY - this.size * 1.1, this.size * 0.6, 6);
+    // Variant visual indicators
+    if (this.variant === 'armored') {
+      // Armored: extra plating (gray rectangles)
+      ctx.fillStyle = '#666666';
+      ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.2, this.size * 0.2, this.size * 0.8);
+      ctx.fillRect(this.x + this.size * 0.5, bodyY - this.size * 0.2, this.size * 0.2, this.size * 0.8);
+    } else if (this.variant === 'fast') {
+      // Fast: speed stripes (orange lines)
+      ctx.strokeStyle = '#ff9900';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size * 0.8, bodyY - this.size * 0.4 + i * this.size * 0.3);
+        ctx.lineTo(this.x + this.size * 0.8, bodyY - this.size * 0.4 + i * this.size * 0.3);
+        ctx.stroke();
+      }
+    } else if (this.variant === 'regenerating') {
+      // Regenerating: green glow (pulsing)
+      const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+      ctx.save();
+      ctx.globalAlpha = pulse * 0.4;
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(this.x, bodyY, this.size * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     this.drawHealthBar(ctx);

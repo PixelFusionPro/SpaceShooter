@@ -42,6 +42,9 @@ class WaveManager {
     let count = this.wave * CONFIG.WAVE.ENEMIES_PER_WAVE_MULTIPLIER;
     let difficulty = 1 + (this.wave - 1) * CONFIG.WAVE.DIFFICULTY_SCALING;
 
+    // Cap difficulty to prevent impossible high waves
+    difficulty = Math.min(difficulty, CONFIG.WAVE.MAX_DIFFICULTY);
+
     // Apply milestone difficulty spike
     const milestoneSpike = this.getMilestoneDifficultySpike();
     difficulty *= milestoneSpike;

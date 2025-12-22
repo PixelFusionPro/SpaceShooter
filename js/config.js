@@ -36,6 +36,7 @@ const CONFIG = {
     ENEMIES_PER_WAVE_MULTIPLIER: 4,
     BOSS_WAVE_INTERVAL: 5,
     DIFFICULTY_SCALING: 0.05, // 5% increase per wave
+    MAX_DIFFICULTY: 10, // Cap difficulty at 10x (prevents impossible high waves)
     RARE_SPAWN_EXPLOSIVE: 0.05,
     RARE_SPAWN_HEALER: 0.10,
   },
