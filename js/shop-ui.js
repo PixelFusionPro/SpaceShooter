@@ -185,7 +185,7 @@ function renderShopItems(type) {
       }
       if (item.effect && item.effect.type) {
         if (item.effect.type === 'piercing') {
-          effects.push(`Pierces: ${item.effect.value} zombies`);
+          effects.push(`Pierces: ${item.effect.value} enemies`);
         } else if (item.effect.type === 'explosive') {
           effects.push(`AOE Radius: ${item.effect.value}px`);
         } else if (item.effect.type === 'ice') {
@@ -193,7 +193,7 @@ function renderShopItems(type) {
         } else if (item.effect.type === 'fire') {
           effects.push(`Burn: ${item.effect.value} damage over ${item.effect.duration/1000}s`);
         } else if (item.effect.type === 'electric') {
-          effects.push(`Chains: ${item.effect.value} nearby zombies`);
+          effects.push(`Chains: ${item.effect.value} nearby enemies`);
         } else if (item.effect.type === 'poison') {
           effects.push(`Poison: ${item.effect.value} damage over ${item.effect.duration/1000}s`);
         } else if (item.effect.type === 'armor_piercing') {
@@ -426,7 +426,7 @@ function renderInventoryItems(type) {
       }
       if (item.effect && item.effect.type) {
         if (item.effect.type === 'piercing') {
-          effects.push(`Pierces: ${item.effect.value} zombies`);
+          effects.push(`Pierces: ${item.effect.value} enemies`);
         } else if (item.effect.type === 'explosive') {
           effects.push(`AOE Radius: ${item.effect.value}px`);
         } else if (item.effect.type === 'ice') {
@@ -434,7 +434,7 @@ function renderInventoryItems(type) {
         } else if (item.effect.type === 'fire') {
           effects.push(`Burn: ${item.effect.value} damage over ${item.effect.duration/1000}s`);
         } else if (item.effect.type === 'electric') {
-          effects.push(`Chains: ${item.effect.value} nearby zombies`);
+          effects.push(`Chains: ${item.effect.value} nearby enemies`);
         } else if (item.effect.type === 'poison') {
           effects.push(`Poison: ${item.effect.value} damage over ${item.effect.duration/1000}s`);
         } else if (item.effect.type === 'armor_piercing') {

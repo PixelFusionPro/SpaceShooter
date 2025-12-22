@@ -17,8 +17,8 @@ const CONFIG = {
     MULTISHOT_COUNT: 3, // Number of bullets when multishot active
   },
 
-  // Zombies
-  ZOMBIES: {
+  // Enemies
+  ENEMIES: {
     NORMAL: { SIZE: 7.5, SPEED: 0.9, HEALTH: 2 },
     TANK: { SIZE: 11, SPEED: 0.5, HEALTH: 5 },
     RUNNER: { SIZE: 6, SPEED: 1.5, HEALTH: 1 },

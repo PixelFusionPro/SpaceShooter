@@ -18,7 +18,7 @@ class Bullet {
     this.color = '#00ffff'; // Default cyan laser
     this.trailColor = '#0088ff';
     this.pierceCount = 0; // How many zombies it can pierce
-    this.piercedZombies = []; // Track pierced zombies
+    this.piercedEnemies = []; // Track pierced zombies
     this.explosiveRadius = 0; // AOE radius
     this.effectType = null; // Special effect type
     this.effectValue = 0; // Effect strength
@@ -32,7 +32,7 @@ class Bullet {
     this.dx = Math.cos(angle) * CONFIG.BULLET.SPEED;
     this.dy = Math.sin(angle) * CONFIG.BULLET.SPEED;
     this.active = true;
-    this.piercedZombies = []; // Reset pierced zombies
+    this.piercedEnemies = []; // Reset pierced zombies
 
     // Apply ammo properties
     if (ammoType) {
@@ -150,22 +150,22 @@ class Bullet {
     }
   }
 
-  checkCollision(zombie) {
+  checkCollision(enemy) {
     // Check if already pierced this zombie
-    if (this.piercedZombies.includes(zombie)) {
+    if (this.piercedEnemies.includes(enemy)) {
       return false;
     }
     return Math.hypot(this.x - zombie.x, this.y - zombie.y) < zombie.size;
   }
 
-  markPierced(zombie) {
-    // Mark zombie as pierced
-    if (!this.piercedZombies.includes(zombie)) {
-      this.piercedZombies.push(zombie);
+  markPierced(enemy) {
+    // Mark enemy as pierced
+    if (!this.piercedEnemies.includes(enemy)) {
+      this.piercedEnemies.push(enemy);
     }
   }
 
   canPierce() {
-    return this.piercedZombies.length < this.pierceCount;
+    return this.piercedEnemies.length < this.pierceCount;
   }
 }

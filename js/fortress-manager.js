@@ -1,4 +1,4 @@
-// Fortress Manager - Defensive structures that slow/block zombies
+// Fortress Manager - Defensive structures that slow/block enemies
 
 class FortressStructure {
   constructor(type, x, y, width, height) {
@@ -29,7 +29,7 @@ class FortressStructure {
       this.upgradeDamageBonus = config.UPGRADE_DAMAGE_BONUS || 0.5;
       this.lastShotTime = 0;
       this.bulletPool = null; // Will be set by FortressManager
-      this.zombieManager = null; // Will be set by FortressManager
+      this.enemyManager = null; // Will be set by FortressManager
     }
 
     this.active = true;
@@ -52,7 +52,7 @@ class FortressStructure {
     }
     
     // Tower shooting logic
-    if (this.type === 'tower' && this.bulletPool && this.zombieManager) {
+    if (this.type === 'tower' && this.bulletPool && this.enemyManager) {
       this.updateTowerShooting(now);
     }
   }
@@ -61,10 +61,10 @@ class FortressStructure {
   updateTowerShooting(now) {
     if (now - this.lastShotTime < this.fireRate) return;
     
-    // Find nearest zombie in range
+    // Find nearest enemy in range
     const towerCenterX = this.x + this.width / 2;
     const towerCenterY = this.y + this.height / 2;
-    const target = this.zombieManager.findNearest(towerCenterX, towerCenterY);
+    const target = this.enemyManager.findNearest(towerCenterX, towerCenterY);
     
     if (!target || target.dying) return;
     
@@ -361,14 +361,14 @@ class FortressStructure {
     ctx.fillRect(this.x, this.y - 8, barWidth * healthPercent, barHeight);
   }
 
-  // Check if a zombie collides with this structure
-  checkZombieCollision(zombie) {
+  // Check if a enemy collides with this structure
+  checkEnemyCollision(enemy) {
     if (!this.active) return false;
 
-    return zombie.x + zombie.size > this.x &&
-           zombie.x - zombie.size < this.x + this.width &&
-           zombie.y + zombie.size > this.y &&
-           zombie.y - zombie.size < this.y + this.height;
+    return enemy.x + enemy.size > this.x &&
+           enemy.x - enemy.size < this.x + this.width &&
+           enemy.y + enemy.size > this.y &&
+           enemy.y - enemy.size < this.y + this.height;
   }
 
   // Check if a bullet collides with this structure
@@ -394,29 +394,29 @@ class FortressManager {
     this.placementMode = false;
     this.placementType = null;
     
-    // Track zombies that have passed through fences (zombie object -> Set of structure indices)
-    this.zombiesPassedThrough = new WeakMap();
+    // Track enemies that have passed through fences (zombie object -> Set of structure indices)
+    this.enemiesPassedThrough = new WeakMap();
     
-    // Track zombies that are blocked from fences (zombie object -> Set of structure indices)
-    this.zombiesBlockedFrom = new WeakMap();
+    // Track enemies that are blocked from fences (zombie object -> Set of structure indices)
+    this.enemiesBlockedFrom = new WeakMap();
     
     // References for tower shooting
     this.bulletPool = null;
-    this.zombieManager = null;
+    this.enemyManager = null;
     
     // Load saved upgrade levels from localStorage
     this.loadUpgradeLevels();
   }
   
   // Set references for tower shooting
-  setReferences(bulletPool, zombieManager) {
+  setReferences(bulletPool, enemyManager) {
     this.bulletPool = bulletPool;
-    this.zombieManager = zombieManager;
+    this.enemyManager = enemyManager;
     // Update all existing towers
     for (const structure of this.structures) {
       if (structure.type === 'tower') {
         structure.bulletPool = bulletPool;
-        structure.zombieManager = zombieManager;
+        structure.enemyManager = enemyManager;
       }
     }
   }
@@ -480,7 +480,7 @@ class FortressManager {
     // Set tower references if available
     if (type === 'tower') {
       structure.bulletPool = this.bulletPool;
-      structure.zombieManager = this.zombieManager;
+      structure.enemyManager = this.enemyManager;
     }
     
     // Apply saved upgrade level if it exists
@@ -514,30 +514,30 @@ class FortressManager {
     }
   }
 
-  // Handle zombie-structure collisions
-  handleZombieCollisions(zombies) {
-    for (const zombie of zombies) {
+  // Handle enemy-structure collisions
+  handleEnemyCollisions(enemies) {
+    for (const enemy of enemies) {
       if (zombie.dying) continue;
 
       // Store original speed if not already stored
       if (zombie.baseSpeed === undefined) {
-        zombie.baseSpeed = zombie.speed;
+        enemy.baseSpeed = enemy.speed;
       }
 
       // Reset speed to base at start of collision check
-      zombie.speed = zombie.baseSpeed;
+      enemy.speed = enemy.baseSpeed;
 
-      // Get or create the sets for this zombie
-      let passedStructures = this.zombiesPassedThrough.get(zombie);
+      // Get or create the sets for this enemy
+      let passedStructures = this.enemiesPassedThrough.get(enemy);
       if (!passedStructures) {
         passedStructures = new Set();
-        this.zombiesPassedThrough.set(zombie, passedStructures);
+        this.enemiesPassedThrough.set(zombie, passedStructures);
       }
       
-      let blockedStructures = this.zombiesBlockedFrom.get(zombie);
+      let blockedStructures = this.enemiesBlockedFrom.get(enemy);
       if (!blockedStructures) {
         blockedStructures = new Set();
-        this.zombiesBlockedFrom.set(zombie, blockedStructures);
+        this.enemiesBlockedFrom.set(zombie, blockedStructures);
       }
 
       let isColliding = false;
@@ -545,24 +545,24 @@ class FortressManager {
         const structure = this.structures[i];
         if (!structure.active) continue;
 
-        if (structure.checkZombieCollision(zombie)) {
+        if (structure.checkEnemyCollision(enemy)) {
           isColliding = true;
 
-          // Check if this zombie has already been determined for this fence
+          // Check if this enemy has already been determined for this fence
           const hasPassedThrough = passedStructures.has(i);
           const isBlockedFrom = blockedStructures.has(i);
           
-          // Fences: 1 in 20 (5%) chance zombie can pass through (skip slow and block)
+          // Fences: 1 in 20 (5%) chance enemy can pass through (skip slow and block)
           // Other structures: always block
           const isFence = structure.type === 'fence';
           let canPassThrough = false;
           
           if (isFence) {
             if (hasPassedThrough) {
-              // Already determined - this zombie can pass through, allow to continue
+              // Already determined - this enemy can pass through, allow to continue
               canPassThrough = true;
             } else if (isBlockedFrom) {
-              // Already determined - this zombie is blocked from this fence
+              // Already determined - this enemy is blocked from this fence
               canPassThrough = false;
             } else {
               // First time hitting this fence - make ONE determination
@@ -570,7 +570,7 @@ class FortressManager {
               const roll = Math.random();
               canPassThrough = roll < 0.05;
               
-              // Mark this zombie's determination for this fence
+              // Mark this enemy's determination for this fence
               if (canPassThrough) {
                 passedStructures.add(i);
               } else {
@@ -580,66 +580,66 @@ class FortressManager {
           }
           
           if (!canPassThrough) {
-            // Slow zombie (apply slow effect once per frame)
+            // Slow enemy (apply slow effect once per frame)
             if (structure.slowEffect > 0) {
-              zombie.speed = zombie.baseSpeed * (1 - structure.slowEffect);
+              enemy.speed = enemy.baseSpeed * (1 - structure.slowEffect);
             }
 
-            // Block zombie (strong push back to prevent passing through)
+            // Block enemy (strong push back to prevent passing through)
             if (structure.blockage > 0) {
               const pushBackStrength = structure.blockage * 2; // Increased blocking strength
-              const dx = zombie.x - (structure.x + structure.width / 2);
-              const dy = zombie.y - (structure.y + structure.height / 2);
+              const dx = enemy.x - (structure.x + structure.width / 2);
+              const dy = enemy.y - (structure.y + structure.height / 2);
               const dist = Math.hypot(dx, dy);
 
               if (dist > 0) {
-                // Push zombie away from structure center
-                zombie.x += (dx / dist) * pushBackStrength;
-                zombie.y += (dy / dist) * pushBackStrength;
+                // Push enemy away from structure center
+                enemy.x += (dx / dist) * pushBackStrength;
+                enemy.y += (dy / dist) * pushBackStrength;
                 
-                // Additional push to ensure zombie is outside structure bounds
-                if (zombie.x + zombie.size > structure.x && zombie.x - zombie.size < structure.x + structure.width &&
-                    zombie.y + zombie.size > structure.y && zombie.y - zombie.size < structure.y + structure.height) {
-                  // Zombie is still inside, push to nearest edge
-                  const distToLeft = zombie.x - structure.x;
-                  const distToRight = (structure.x + structure.width) - zombie.x;
-                  const distToTop = zombie.y - structure.y;
-                  const distToBottom = (structure.y + structure.height) - zombie.y;
+                // Additional push to ensure enemy is outside structure bounds
+                if (zombie.x + enemy.size > structure.x && enemy.x - enemy.size < structure.x + structure.width &&
+                    enemy.y + enemy.size > structure.y && enemy.y - enemy.size < structure.y + structure.height) {
+                  // Enemy is still inside, push to nearest edge
+                  const distToLeft = enemy.x - structure.x;
+                  const distToRight = (structure.x + structure.width) - enemy.x;
+                  const distToTop = enemy.y - structure.y;
+                  const distToBottom = (structure.y + structure.height) - enemy.y;
                   
                   const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
                   
                   if (minDist === distToLeft) {
-                    zombie.x = structure.x - zombie.size - 1;
+                    enemy.x = structure.x - enemy.size - 1;
                   } else if (minDist === distToRight) {
-                    zombie.x = structure.x + structure.width + zombie.size + 1;
+                    enemy.x = structure.x + structure.width + enemy.size + 1;
                   } else if (minDist === distToTop) {
-                    zombie.y = structure.y - zombie.size - 1;
+                    enemy.y = structure.y - enemy.size - 1;
                   } else {
-                    zombie.y = structure.y + structure.height + zombie.size + 1;
+                    enemy.y = structure.y + structure.height + enemy.size + 1;
                   }
                 }
               }
             }
           } else {
-            // Zombie is passing through fence - allow it to move through
-            // Check if zombie has moved past the fence bounds
+            // Enemy is passing through fence - allow it to move through
+            // Check if enemy has moved past the fence bounds
             const isPastFence = 
-              zombie.x + zombie.size < structure.x || 
-              zombie.x - zombie.size > structure.x + structure.width ||
-              zombie.y + zombie.size < structure.y || 
-              zombie.y - zombie.size > structure.y + structure.height;
+              enemy.x + enemy.size < structure.x || 
+              enemy.x - enemy.size > structure.x + structure.width ||
+              enemy.y + enemy.size < structure.y || 
+              enemy.y - enemy.size > structure.y + structure.height;
             
             if (isPastFence) {
-              // Zombie has passed through, remove from tracking
+              // Enemy has passed through, remove from tracking
               passedStructures.delete(i);
             }
           }
-          // If canPassThrough is true (fence only), zombie passes through without being slowed or blocked
+          // If canPassThrough is true (fence only), enemy passes through without being slowed or blocked
 
-          // Damage structure from zombie contact (even if zombie passes through)
-          structure.takeDamage(CONFIG.ZOMBIES.DAMAGE_PER_FRAME * 0.5);
+          // Damage structure from enemy contact (even if enemy passes through)
+          structure.takeDamage(CONFIG.ENEMIES.DAMAGE_PER_FRAME * 0.5);
         } else {
-          // Zombie is not colliding with this structure, remove from tracking if it was
+          // Enemy is not colliding with this structure, remove from tracking if it was
           // (but keep blocked status - once blocked, always blocked for this fence)
           if (passedStructures.has(i)) {
             passedStructures.delete(i);
@@ -758,7 +758,7 @@ class FortressManager {
     this.structures = [];
     this.placementMode = false;
     this.placementType = null;
-    // Note: WeakMap automatically cleans up when zombies are garbage collected
+    // Note: WeakMap automatically cleans up when enemies are garbage collected
     // Note: upgradeLevels are NOT reset - they persist across games
   }
 }

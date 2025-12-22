@@ -37,7 +37,7 @@ class Companion {
     this.animationTime = 0;
   }
 
-  update(playerX, playerY, zombieManager, player, boosts = {}) {
+  update(playerX, playerY, enemyManager, player, boosts = {}) {
     if (this.dying) {
       this.deathProgress += 0.05;
       return this.deathProgress >= 1;
@@ -64,13 +64,13 @@ class Companion {
         break;
     }
 
-    // Auto-shoot at priority target (prioritizes elite/boss zombies)
-    const target = zombieManager.findPriorityTarget(this.x, this.y, this.range);
+    // Auto-shoot at priority target (prioritizes elite/boss enemies)
+    const target = enemyManager.findPriorityTarget(this.x, this.y, this.range);
     if (target && !target.dying) {
       const dist = Math.hypot(target.x - this.x, target.y - this.y);
       if (dist < this.range) {
         // Pass bulletPool from companion's reference (set by CompanionManager)
-        this.shoot(target, zombieManager, this.bulletPool);
+        this.shoot(target, enemyManager, this.bulletPool);
       }
     }
 
@@ -130,7 +130,7 @@ class Companion {
     }
   }
 
-  shoot(target, zombieManager, bulletPool = null) {
+  shoot(target, enemyManager, bulletPool = null) {
     const now = Date.now();
     if (now - this.lastShotTime < this.fireRate) return;
 
@@ -158,8 +158,8 @@ class Companion {
 
       if (target.health <= 0) {
         const hitAngle = Math.atan2(target.y - this.y, target.x - this.x);
-        zombieManager.killZombie(
-          zombieManager.zombies.indexOf(target),
+        enemyManager.killZombie(
+          enemyManager.enemies.indexOf(target),
           hitAngle,
           null
         );
@@ -468,12 +468,12 @@ class CompanionManager {
   }
 
   // Update all companions
-  update(playerX, playerY, zombieManager, player, boosts) {
+  update(playerX, playerY, enemyManager, player, boosts) {
     for (let i = this.companions.length - 1; i >= 0; i--) {
       const companion = this.companions[i];
       // Pass bulletPool to companion so it can create bullets
       companion.bulletPool = this.bulletPool;
-      const finished = companion.update(playerX, playerY, zombieManager, player, boosts);
+      const finished = companion.update(playerX, playerY, enemyManager, player, boosts);
 
       if (finished) {
         this.companions.splice(i, 1);
@@ -481,17 +481,17 @@ class CompanionManager {
     }
   }
 
-  // Handle companion damage from zombies
-  checkZombieCollisions(zombies) {
+  // Handle companion damage from enemies
+  checkEnemyCollisions(enemies) {
     for (const companion of this.companions) {
       if (companion.dying) continue;
 
-      for (const zombie of zombies) {
+      for (const enemy of enemies) {
         if (zombie.dying) continue;
 
-        const dist = Math.hypot(companion.x - zombie.x, companion.y - zombie.y);
-        if (dist < companion.size + zombie.size) {
-          companion.takeDamage(CONFIG.ZOMBIES.DAMAGE_PER_FRAME * 2); // Companions take 2x damage
+        const dist = Math.hypot(companion.x - enemy.x, companion.y - enemy.y);
+        if (dist < companion.size + enemy.size) {
+          companion.takeDamage(CONFIG.ENEMIES.DAMAGE_PER_FRAME * 2); // Companions take 2x damage
         }
       }
     }

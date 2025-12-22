@@ -206,7 +206,7 @@ class ParticleManager {
     }
   }
 
-  // Spawn elite zombie aura particles (rotating energy rings)
+  // Spawn elite enemy aura particles (rotating energy rings)
   spawnEliteAura(x, y) {
     // Spawn a few particles each time for smooth rotating effect
     const particleCount = 2;
@@ -260,7 +260,7 @@ class ParticleManager {
     }
   }
 
-  // Spawn explosive zombie glow particles (warning pulses)
+  // Spawn explosive enemy glow particles (warning pulses)
   spawnExplosiveGlow(x, y) {
     // Spawn a few particles each time for pulsing effect
     const particleCount = 2;
@@ -288,7 +288,7 @@ class ParticleManager {
     }
   }
 
-  // Spawn healer zombie aura particles (floating healing energy)
+  // Spawn healer enemy aura particles (floating healing energy)
   spawnHealerAura(x, y) {
     // Spawn a few floating particles each time
     const particleCount = 2;
@@ -335,12 +335,12 @@ class ParticleManager {
     this.speedEnergyParticles.draw(ctx);
     this.multishotParticles.draw(ctx);
     this.healParticles.draw(ctx);
-    // Draw zombie aura particles before sparkles (below player and other effects)
+    // Draw enemy aura particles before sparkles (below player and other effects)
     this.eliteAuraParticles.draw(ctx);
     this.bossAuraParticles.draw(ctx);
     this.explosiveGlowParticles.draw(ctx);
     this.healerAuraParticles.draw(ctx);
-    // Draw rank particles after zombies but before sparkles
+    // Draw rank particles after enemies but before sparkles
     this.rankParticles.draw(ctx);
     this.sparkleParticles.draw(ctx); // Draw sparkles last (on top)
   }

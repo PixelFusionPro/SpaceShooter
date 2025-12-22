@@ -1,11 +1,11 @@
-// Wave Manager - Handles wave progression and zombie spawning
+// Wave Manager - Handles wave progression and enemy spawning
 
 class WaveManager {
   constructor(canvas) {
     this.canvas = canvas;
     this.wave = 1;
     this.wavePending = false;
-    this.waveStarted = false; // Track if wave has zombies spawned
+    this.waveStarted = false; // Track if wave has enemies spawned
 
     // UI elements
     this.waveIntroElement = document.getElementById('waveIntro');
@@ -31,9 +31,9 @@ class WaveManager {
     return 1.0;
   }
 
-  // Spawn zombies for current wave
+  // Spawn enemies for current wave
   spawnWave() {
-    const zombies = [];
+    const enemies = [];
     this.waveStarted = true; // Mark that wave has started
 
     // Show wave intro
@@ -46,44 +46,44 @@ class WaveManager {
     const milestoneSpike = this.getMilestoneDifficultySpike();
     difficulty *= milestoneSpike;
 
-    // Milestone waves spawn extra zombies
+    // Milestone waves spawn extra enemies
     if (this.isMilestoneWave()) {
-      count = Math.ceil(count * 1.25); // 25% more zombies on milestone waves
+      count = Math.ceil(count * 1.25); // 25% more enemies on milestone waves
     }
 
-    // Spawn regular zombies
+    // Spawn regular enemies
     for (let i = 0; i < count; i++) {
-      let zombie;
+      let enemy;
 
-      // Random zombie type based on wave
+      // Random enemy type based on wave
       if (this.wave >= 15) {
         const types = ['normal', 'tank', 'runner', 'explosive', 'healer'];
         const type = types[Math.floor(Math.random() * types.length)];
-        zombie = new Zombie(this.canvas, type);
+        enemy = new EnemyShip(this.canvas, type);
       } else if (this.wave >= 10) {
         const types = ['normal', 'tank', 'runner', 'explosive'];
         const type = types[Math.floor(Math.random() * types.length)];
-        zombie = new Zombie(this.canvas, type);
+        enemy = new EnemyShip(this.canvas, type);
       } else if (this.wave >= 5) {
         const types = ['normal', 'tank', 'runner'];
         const type = types[Math.floor(Math.random() * types.length)];
-        zombie = new Zombie(this.canvas, type);
+        enemy = new EnemyShip(this.canvas, type);
       } else {
-        zombie = new Zombie(this.canvas, 'normal');
+        enemy = new EnemyShip(this.canvas, 'normal');
       }
 
       // Scale difficulty
-      zombie.speed *= difficulty;
-      zombie.health = Math.ceil(zombie.health * difficulty);
-      zombie.maxHealth = zombie.health;
-      zombies.push(zombie);
+      enemy.speed *= difficulty;
+      enemy.health = Math.ceil(zombie.health * difficulty);
+      enemy.maxHealth = enemy.health;
+      enemies.push(zombie);
     }
 
     // Boss spawn every 5 waves
     if (this.wave % CONFIG.WAVE.BOSS_WAVE_INTERVAL === 0) {
-      const boss = new Zombie(this.canvas, 'boss');
+      const boss = new EnemyShip(this.canvas, 'boss');
 
-      // Bosses scale more aggressively than regular zombies
+      // Bosses scale more aggressively than regular enemies
       const bossScaling = 1.2; // 20% extra scaling for bosses
       boss.speed *= (difficulty * bossScaling);
       boss.health = Math.ceil(boss.health * difficulty * bossScaling);
@@ -92,22 +92,22 @@ class WaveManager {
       // Milestone boss waves: spawn multiple bosses
       if (this.isMilestoneWave()) {
         const extraBosses = this.wave >= 100 ? 2 : 1;
-        zombies.push(boss);
+        enemies.push(boss);
 
-        // Spawn additional elite zombies alongside the boss
+        // Spawn additional elite enemies alongside the boss
         for (let i = 0; i < extraBosses; i++) {
-          const eliteBoss = new Zombie(this.canvas, 'boss');
+          const eliteBoss = new EnemyShip(this.canvas, 'boss');
           eliteBoss.speed *= (difficulty * bossScaling);
           eliteBoss.health = Math.ceil(eliteBoss.health * difficulty * bossScaling * 0.75); // Slightly weaker than main boss
           eliteBoss.maxHealth = eliteBoss.health;
-          zombies.push(eliteBoss);
+          enemies.push(eliteBoss);
         }
       } else {
-        zombies.push(boss);
+        enemies.push(boss);
       }
     }
 
-    return zombies;
+    return enemies;
   }
 
   // Show wave intro overlay
@@ -170,9 +170,9 @@ class WaveManager {
   }
 
   // Check if wave is complete
-  isWaveComplete(aliveZombies) {
-    // Only allow completion if wave has started and no zombies are alive
-    return this.waveStarted && aliveZombies === 0 && !this.wavePending;
+  isWaveComplete(aliveEnemies) {
+    // Only allow completion if wave has started and no enemies are alive
+    return this.waveStarted && aliveEnemies === 0 && !this.wavePending;
   }
 
   // Reset for new game

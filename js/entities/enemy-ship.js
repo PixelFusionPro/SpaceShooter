@@ -1,8 +1,8 @@
-class Zombie {
+class EnemyShip {
   constructor(canvas, type = 'normal') {
     this.canvas = canvas;
     this.type = type;
-    const config = CONFIG.ZOMBIES[type.toUpperCase()] || CONFIG.ZOMBIES.NORMAL;
+    const config = CONFIG.ENEMIES[type.toUpperCase()] || CONFIG.ENEMIES.NORMAL;
     this.size = config.SIZE;
     this.speed = config.SPEED;
     this.baseSpeed = config.SPEED; // Store base speed for fortress collision slowdown
@@ -11,8 +11,8 @@ class Zombie {
     this.lastX = 0;
     this.lastY = 0;
     this.stuckTimer = 0;
-    this.elite = Math.random() < CONFIG.ZOMBIES.ELITE_CHANCE;
-    this.variant = Math.random() < CONFIG.ZOMBIES.VARIANT_CHANCE ? 'hat' : null;
+    this.elite = Math.random() < CONFIG.ENEMIES.ELITE_CHANCE;
+    this.variant = Math.random() < CONFIG.ENEMIES.VARIANT_CHANCE ? 'hat' : null;
 
     // Damage/missing limbs (calculated once, not every frame)
     this.hasLeftArm = Math.random() > 0.25;
@@ -34,7 +34,7 @@ class Zombie {
 
     // Boss-specific
     if (type === 'boss') {
-      this.minionInterval = CONFIG.ZOMBIES.BOSS.MINION_INTERVAL;
+      this.minionInterval = CONFIG.ENEMIES.BOSS.MINION_INTERVAL;
       this.nextMinionTime = Date.now() + this.minionInterval;
     }
 
@@ -99,14 +99,14 @@ class Zombie {
     // Check collision with player
     const collisionDist = dist < (this.size + CONFIG.PLAYER.SIZE);
     if (collisionDist && !shieldActive) {
-      return CONFIG.ZOMBIES.DAMAGE_PER_FRAME; // Return damage dealt
+      return CONFIG.ENEMIES.DAMAGE_PER_FRAME; // Return damage dealt
     }
 
     // Anti-stuck system
     const moved = Math.hypot(this.x - this.lastX, this.y - this.lastY);
     if (moved < 0.5) {
       this.stuckTimer++;
-      if (this.stuckTimer > CONFIG.ZOMBIES.STUCK_THRESHOLD) {
+      if (this.stuckTimer > CONFIG.ENEMIES.STUCK_THRESHOLD) {
         this.spawnFromEdge();
         this.stuckTimer = 0;
       }
