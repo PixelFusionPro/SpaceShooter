@@ -64,13 +64,15 @@ class SpaceShooterGame {
     this.controls = new Controls(canvas, (isPaused) => this.handlePauseToggle(isPaused));
 
     // Managers (Industry-leading separation of concerns)
+    this.audioManager = new AudioManager();
+    this.screenEffects = new ScreenEffects();
     this.particleManager = new ParticleManager();
     this.scoreManager = new ScoreManager();
     this.statisticsManager = new StatisticsManager();
     this.inventoryManager = new InventoryManager();
     this.achievementManager = new AchievementManager(this.scoreManager);
     this.shopManager = new ShopManager(this.inventoryManager, this.scoreManager, this.achievementManager);
-    this.powerupManager = new PowerupManager(canvas, this.particleManager);
+    this.powerupManager = new PowerupManager(canvas, this.particleManager, this.audioManager);
     this.waveManager = new WaveManager(canvas);
     this.enemyManager = new EnemyManager(canvas, this.particleManager);
     this.fortressManager = new FortressManager(canvas, this.achievementManager);
@@ -158,6 +160,10 @@ class SpaceShooterGame {
     if (screenManager) {
       screenManager.hideOverlay('gameOverScreen');
     }
+
+    // Resume audio context and start music
+    this.audioManager.resume();
+    this.audioManager.playMusic('gameplay');
 
     // Spawn first wave
     const enemies = this.waveManager.spawnWave();
@@ -284,6 +290,28 @@ class SpaceShooterGame {
       this.particleManager.spawnMultishotEnergy(this.player.x, this.player.y, angle);
     }
 
+    // Play shoot sound (higher pitch for multishot)
+    if (bulletsCreated > 0) {
+      this.audioManager.playSound('shoot_laser', 0.3, bulletCount > 1 ? 1.2 : 1.0);
+
+      // Spawn muzzle flash particles
+      for (let i = 0; i < 3; i++) {
+        const spread = (Math.random() - 0.5) * 0.3;
+        const flashAngle = angle + spread;
+        const flashDist = 20 + Math.random() * 10;
+        this.particleManager.sparkleParticles.add({
+          x: this.player.x + Math.cos(flashAngle) * flashDist,
+          y: this.player.y + Math.sin(flashAngle) * flashDist,
+          dx: Math.cos(flashAngle) * 2,
+          dy: Math.sin(flashAngle) * 2,
+          life: 5,
+          maxLife: 5,
+          size: Math.random() * 3 + 2,
+          color: '#ffff00'
+        });
+      }
+    }
+
     this.player.reloadProgress = 1;
     this.lastShotTime = now;
   }
@@ -301,6 +329,28 @@ class SpaceShooterGame {
 
     // Track damage dealt and critical hits for achievements
     this.achievementManager.trackDamageDealt(damageDealt);
+
+    // Play hit sound
+    this.audioManager.playSound('enemy_hit', 0.2, 1.0 + Math.random() * 0.2);
+
+    // Spawn impact particles
+    if (bullet && this.particleManager) {
+      const hitAngle = Math.atan2(bullet.dy, bullet.dx);
+      for (let i = 0; i < 5; i++) {
+        const spread = (Math.random() - 0.5) * 0.5;
+        const particleAngle = hitAngle + spread;
+        this.particleManager.explosionParticles.add({
+          x: enemy.x,
+          y: enemy.y,
+          dx: Math.cos(particleAngle) * (2 + Math.random() * 2),
+          dy: Math.sin(particleAngle) * (2 + Math.random() * 2),
+          life: 10,
+          maxLife: 10,
+          size: Math.random() * 2 + 1,
+          color: '#ffaa00'
+        });
+      }
+    }
 
     // Spawn damage number for tower shots
     const isTowerShot = bullet && bullet.towerShot;
@@ -373,6 +423,17 @@ class SpaceShooterGame {
     const dx = enemy.x - this.player.x;
     const dy = enemy.y - this.player.y;
     const hitAngle = Math.atan2(dy, dx);
+
+    // Play death sound (different for boss)
+    if (enemy.type === 'boss') {
+      this.audioManager.playSound('boss_death', 1.0);
+      // Heavy screen shake for boss death
+      this.screenEffects.shake(15, 20);
+    } else {
+      this.audioManager.playSound('enemy_death', 0.4, 0.9 + Math.random() * 0.3);
+      // Small shake for normal enemy death
+      this.screenEffects.shake(2, 5);
+    }
 
     // Track tower kill if killed by tower bullet
     const isTowerKill = bullet && bullet.towerShot;
@@ -835,6 +896,10 @@ class SpaceShooterGame {
       this.player.takeHit();
       this.flashDamage();
       this.achievementManager.trackDamageTaken(damage);
+      this.audioManager.playSound('player_damage', 0.5);
+      // Screen shake and hit flash on damage
+      this.screenEffects.shake(8, 12);
+      this.screenEffects.flashHit(0.4);
     }
 
     // Update companions
@@ -955,6 +1020,8 @@ class SpaceShooterGame {
     // Game over check - Phase 3: Start death animation instead of immediate game over
     if (this.player.health <= 0 && !this.gameOver && !this.player.dying) {
       this.player.startDeath();
+      // Play death sound
+      this.audioManager.playSound('player_death', 0.8);
       // Spawn death particles
       this.particleManager.spawnBloodSpray(this.player.x, this.player.y, 0, 20, false, false);
       // Spawn explosion ring
@@ -980,6 +1047,9 @@ class SpaceShooterGame {
 
     // Update all particle systems
     this.particleManager.update();
+
+    // Update screen effects
+    this.screenEffects.update();
 
     // Sync powerup collection count to achievement manager
     this.achievementManager.trackPowerup(this.powerupManager.collectedCount);
@@ -1174,6 +1244,11 @@ class SpaceShooterGame {
   draw() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+    // Apply screen shake
+    const shake = this.screenEffects.getShakeOffset();
+    this.ctx.save();
+    this.ctx.translate(shake.x, shake.y);
+
     // Draw animated stars background
     this.drawStars();
 
@@ -1236,6 +1311,12 @@ class SpaceShooterGame {
 
     // Draw low health screen border warning (≤20% health)
     this.drawLowHealthWarning();
+
+    // Restore shake transform
+    this.ctx.restore();
+
+    // Draw hit flash (after shake restore, so it covers full screen)
+    this.screenEffects.drawHitFlash(this.ctx, this.canvas);
   }
 
   drawLowHealthWarning() {

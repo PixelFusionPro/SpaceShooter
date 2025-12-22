@@ -1,9 +1,10 @@
 // Powerup System
 
 class PowerupManager {
-  constructor(canvas, particleManager = null) {
+  constructor(canvas, particleManager = null, audioManager = null) {
     this.canvas = canvas;
     this.particleManager = particleManager;
+    this.audioManager = audioManager;
     this.powerups = [];
     this.timers = {
       multishot: 0,
@@ -101,6 +102,11 @@ class PowerupManager {
   collect(powerup, player, shopManager = null) {
     this.collectedCount++;
 
+    // Play collect sound first
+    if (this.audioManager) {
+      this.audioManager.playSound('powerup_collect', 0.5);
+    }
+
     switch (powerup.type) {
       case 'heal':
         // Calculate max health with armor boosts
@@ -114,16 +120,32 @@ class PowerupManager {
         if (this.particleManager) {
           this.particleManager.spawnHealPlus(player.x, player.y);
         }
+        // Play heal sound
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_heal', 0.6);
+        }
         break;
       case 'speed':
         this.timers.speed = Date.now() + CONFIG.POWERUPS.DURATION;
         player.speed = CONFIG.PLAYER.SPEED_BOOSTED;
+        // Play speed sound
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_speed', 0.5);
+        }
         break;
       case 'multishot':
         this.timers.multishot = Date.now() + CONFIG.POWERUPS.DURATION;
+        // Play multishot sound
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_multishot', 0.5);
+        }
         break;
       case 'shield':
         this.timers.shield = Date.now() + CONFIG.POWERUPS.DURATION;
+        // Play shield sound
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_shield', 0.5);
+        }
         break;
     }
 
