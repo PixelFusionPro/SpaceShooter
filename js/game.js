@@ -75,7 +75,7 @@ class SpaceShooterGame {
     this.powerupManager = new PowerupManager(canvas, this.particleManager, this.audioManager);
     this.waveManager = new WaveManager(canvas);
     this.enemyManager = new EnemyManager(canvas, this.particleManager);
-    this.fortressManager = new FortressManager(canvas, this.achievementManager);
+    this.fortressManager = new FortressManager(canvas, this.achievementManager, this.particleManager, this.audioManager);
 
     // Object pools for performance (must be created before companionManager)
     this.bulletPool = new ObjectPool(
@@ -97,6 +97,12 @@ class SpaceShooterGame {
     this.lastRank = 'Soldier';
     this.startingCurrency = this.scoreManager.currency; // Store starting currency for coins earned calculation
     this.ammoDepletedNotified = false; // Track ammo depletion notifications
+
+    // Performance monitoring
+    this.fps = 60;
+    this.fpsFrames = [];
+    this.fpsLastTime = performance.now();
+    this.showFPS = localStorage.getItem('showFPS') === 'true'; // Load FPS display preference
 
     // UI elements
     this.initUIElements();
@@ -1317,6 +1323,19 @@ class SpaceShooterGame {
 
     // Draw hit flash (after shake restore, so it covers full screen)
     this.screenEffects.drawHitFlash(this.ctx, this.canvas);
+
+    // Draw FPS counter (if enabled)
+    if (this.showFPS) {
+      this.ctx.save();
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      this.ctx.fillRect(this.canvas.width - 75, 5, 70, 25);
+      this.ctx.fillStyle = this.fps < 30 ? '#ff4444' : (this.fps < 50 ? '#ffaa00' : '#00ff00');
+      this.ctx.font = 'bold 16px sans-serif';
+      this.ctx.textAlign = 'right';
+      this.ctx.textBaseline = 'top';
+      this.ctx.fillText(`FPS: ${this.fps}`, this.canvas.width - 10, 10);
+      this.ctx.restore();
+    }
   }
 
   drawLowHealthWarning() {
@@ -1395,6 +1414,23 @@ class SpaceShooterGame {
   }
 
   loop() {
+    // Calculate FPS
+    const now = performance.now();
+    const delta = now - this.fpsLastTime;
+    this.fpsLastTime = now;
+
+    // Track frame times (last 60 frames)
+    this.fpsFrames.push(delta);
+    if (this.fpsFrames.length > 60) {
+      this.fpsFrames.shift();
+    }
+
+    // Calculate average FPS
+    if (this.fpsFrames.length > 0) {
+      const avgDelta = this.fpsFrames.reduce((a, b) => a + b) / this.fpsFrames.length;
+      this.fps = Math.round(1000 / avgDelta);
+    }
+
     this.update();
     this.draw();
 
@@ -1523,4 +1559,108 @@ function openShopFromGameOver() {
 
 function openInventoryFromGameOver() {
   openInventory();
+}
+
+// Audio Control Functions
+function updateSFXVolume(value) {
+  const volume = value / 100;
+  if (Game && Game.audioManager) {
+    Game.audioManager.setSFXVolume(volume);
+    localStorage.setItem('sfxVolume', value);
+    document.getElementById('sfxVolumeValue').textContent = value + '%';
+  }
+}
+
+function updateMusicVolume(value) {
+  const volume = value / 100;
+  if (Game && Game.audioManager) {
+    Game.audioManager.setMusicVolume(volume);
+    localStorage.setItem('musicVolume', value);
+    document.getElementById('musicVolumeValue').textContent = value + '%';
+  }
+}
+
+function toggleMute() {
+  if (Game && Game.audioManager) {
+    Game.audioManager.toggleMute();
+    const isMuted = Game.audioManager.isMuted;
+    localStorage.setItem('audioMuted', isMuted ? 'true' : 'false');
+
+    const muteToggle = document.getElementById('muteToggle');
+    if (isMuted) {
+      muteToggle.textContent = '🔇 Sound Off';
+      muteToggle.classList.add('muted');
+    } else {
+      muteToggle.textContent = '🔊 Sound On';
+      muteToggle.classList.remove('muted');
+    }
+  }
+}
+
+function loadAudioSettings() {
+  // Load SFX volume
+  const sfxVolume = localStorage.getItem('sfxVolume') || '70';
+  document.getElementById('sfxVolumeSlider').value = sfxVolume;
+  document.getElementById('sfxVolumeValue').textContent = sfxVolume + '%';
+  if (Game && Game.audioManager) {
+    Game.audioManager.setSFXVolume(sfxVolume / 100);
+  }
+
+  // Load music volume
+  const musicVolume = localStorage.getItem('musicVolume') || '50';
+  document.getElementById('musicVolumeSlider').value = musicVolume;
+  document.getElementById('musicVolumeValue').textContent = musicVolume + '%';
+  if (Game && Game.audioManager) {
+    Game.audioManager.setMusicVolume(musicVolume / 100);
+  }
+
+  // Load mute state
+  const audioMuted = localStorage.getItem('audioMuted') === 'true';
+  const muteToggle = document.getElementById('muteToggle');
+  if (audioMuted) {
+    if (Game && Game.audioManager) {
+      Game.audioManager.setMute(true);
+    }
+    muteToggle.textContent = '🔇 Sound Off';
+    muteToggle.classList.add('muted');
+  }
+}
+
+// Graphics Quality Functions
+function updateQuality(quality) {
+  localStorage.setItem('graphicsQuality', quality);
+
+  if (Game && Game.particleManager) {
+    // Set particle quality multiplier
+    switch(quality) {
+      case 'low':
+        Game.particleManager.qualityMultiplier = 0.3; // 30% particles
+        break;
+      case 'medium':
+        Game.particleManager.qualityMultiplier = 0.7; // 70% particles
+        break;
+      case 'high':
+        Game.particleManager.qualityMultiplier = 1.0; // 100% particles
+        break;
+    }
+  }
+}
+
+function loadQualitySettings() {
+  const quality = localStorage.getItem('graphicsQuality') || 'medium';
+  document.getElementById('qualitySelect').value = quality;
+
+  if (Game && Game.particleManager) {
+    switch(quality) {
+      case 'low':
+        Game.particleManager.qualityMultiplier = 0.3;
+        break;
+      case 'medium':
+        Game.particleManager.qualityMultiplier = 0.7;
+        break;
+      case 'high':
+        Game.particleManager.qualityMultiplier = 1.0;
+        break;
+    }
+  }
 }

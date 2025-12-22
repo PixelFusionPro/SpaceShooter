@@ -145,6 +145,29 @@
           <span class="pause-stat-value" id="pauseHealth">0/100</span>
         </div>
       </div>
+      <div class="pause-audio-controls">
+        <div class="audio-control">
+          <label class="audio-label">🔊 SFX Volume</label>
+          <input type="range" id="sfxVolumeSlider" min="0" max="100" value="70" class="audio-slider" oninput="updateSFXVolume(this.value)">
+          <span class="audio-value" id="sfxVolumeValue">70%</span>
+        </div>
+        <div class="audio-control">
+          <label class="audio-label">🎵 Music Volume</label>
+          <input type="range" id="musicVolumeSlider" min="0" max="100" value="50" class="audio-slider" oninput="updateMusicVolume(this.value)">
+          <span class="audio-value" id="musicVolumeValue">50%</span>
+        </div>
+        <div class="audio-control">
+          <button class="btn-audio-toggle" id="muteToggle" onclick="toggleMute()">🔊 Sound On</button>
+        </div>
+        <div class="audio-control">
+          <label class="audio-label">⚙️ Graphics</label>
+          <select id="qualitySelect" class="quality-select" onchange="updateQuality(this.value)">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+      </div>
       <div class="pause-buttons">
         <button class="btn-primary" onclick="resumeGame()">Resume</button>
         <button class="btn-secondary" onclick="pauseToMainMenu()">Main Menu</button>
@@ -316,5 +339,14 @@
 <script src="js/fortress-ui.js"></script>
 <!-- Companion UI -->
 <script src="js/companion-ui.js"></script>
+
+<!-- Initialize Settings -->
+<script>
+  // Load settings on page load
+  window.addEventListener('DOMContentLoaded', function() {
+    loadAudioSettings();
+    loadQualitySettings();
+  });
+</script>
 </body>
 </html>

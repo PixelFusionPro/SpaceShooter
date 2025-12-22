@@ -144,17 +144,22 @@ class FortressStructure {
   }
 
   takeDamage(amount) {
+    const wasActive = this.active;
     const actualDamage = amount * (1 - this.damageResistance);
     const damageBlocked = amount - actualDamage;
     this.health -= actualDamage;
 
+    let justDestroyed = false;
     if (this.health <= 0) {
       this.health = 0;
+      if (wasActive) {
+        justDestroyed = true; // Mark that we just got destroyed
+      }
       this.active = false;
     }
 
-    // Return both actual damage and blocked amount for tracking
-    return { actualDamage, damageBlocked };
+    // Return damage info and destruction status
+    return { actualDamage, damageBlocked, justDestroyed };
   }
 
   repair(amount) {
@@ -485,12 +490,14 @@ class FortressStructure {
 }
 
 class FortressManager {
-  constructor(canvas, achievementManager = null) {
+  constructor(canvas, achievementManager = null, particleManager = null, audioManager = null) {
     this.canvas = canvas;
     this.structures = [];
     this.placementMode = false;
     this.placementType = null;
     this.achievementManager = achievementManager;
+    this.particleManager = particleManager;
+    this.audioManager = audioManager;
 
     // Track enemies that have passed through fences (enemy object -> Set of structure indices)
     this.enemiesPassedThrough = new WeakMap();
@@ -595,6 +602,33 @@ class FortressManager {
     }
 
     this.structures.push(structure);
+
+    // Build visual effects
+    if (this.particleManager) {
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+
+      // Blue construction particles
+      for (let i = 0; i < 15; i++) {
+        const angle = (Math.PI * 2 / 15) * i;
+        const speed = 1 + Math.random() * 2;
+        this.particleManager.explosionParticles.add({
+          x: centerX,
+          y: centerY,
+          dx: Math.cos(angle) * speed,
+          dy: Math.sin(angle) * speed,
+          life: 15,
+          maxLife: 15,
+          size: Math.random() * 3 + 2,
+          color: '#4488ff'
+        });
+      }
+    }
+
+    // Build sound effect
+    if (this.audioManager) {
+      this.audioManager.playSound('structure_build', 0.4);
+    }
 
     // Track structure built for achievements
     if (this.achievementManager) {
@@ -743,6 +777,35 @@ class FortressManager {
           // Damage structure from enemy contact (even if enemy passes through)
           const damageResult = structure.takeDamage(CONFIG.ENEMIES.DAMAGE_PER_FRAME * 0.5);
 
+          // Destruction visual effects
+          if (damageResult.justDestroyed) {
+            const centerX = structure.x + structure.width / 2;
+            const centerY = structure.y + structure.height / 2;
+
+            // Red/orange destruction particles
+            if (this.particleManager) {
+              for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1 + Math.random() * 3;
+                this.particleManager.explosionParticles.add({
+                  x: centerX,
+                  y: centerY,
+                  dx: Math.cos(angle) * speed,
+                  dy: Math.sin(angle) * speed,
+                  life: 20,
+                  maxLife: 20,
+                  size: Math.random() * 4 + 2,
+                  color: Math.random() > 0.5 ? '#ff4444' : '#ff8800'
+                });
+              }
+            }
+
+            // Destruction sound effect
+            if (this.audioManager) {
+              this.audioManager.playSound('structure_destroy', 0.5);
+            }
+          }
+
           // Track damage blocked for achievements
           if (this.achievementManager && damageResult.damageBlocked > 0) {
             this.achievementManager.trackDamageBlocked(damageResult.damageBlocked);
@@ -777,9 +840,39 @@ class FortressManager {
           // Companion bullet hits structure - deactivate it
           bullet.active = false;
           bulletPool.release(bullet);
-          
+
           // Structure takes damage from bullet
-          structure.takeDamage(bullet.damage);
+          const damageResult = structure.takeDamage(bullet.damage);
+
+          // Destruction visual effects
+          if (damageResult.justDestroyed) {
+            const centerX = structure.x + structure.width / 2;
+            const centerY = structure.y + structure.height / 2;
+
+            // Red/orange destruction particles
+            if (this.particleManager) {
+              for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1 + Math.random() * 3;
+                this.particleManager.explosionParticles.add({
+                  x: centerX,
+                  y: centerY,
+                  dx: Math.cos(angle) * speed,
+                  dy: Math.sin(angle) * speed,
+                  life: 20,
+                  maxLife: 20,
+                  size: Math.random() * 4 + 2,
+                  color: Math.random() > 0.5 ? '#ff4444' : '#ff8800'
+                });
+              }
+            }
+
+            // Destruction sound effect
+            if (this.audioManager) {
+              this.audioManager.playSound('structure_destroy', 0.5);
+            }
+          }
+
           break; // Bullet can only hit one structure
         }
       }

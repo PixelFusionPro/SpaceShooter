@@ -2,21 +2,24 @@
 
 class ParticleManager {
   constructor() {
-    // Initialize all particle pools
-    this.dustParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.trailParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.sparkleParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.explosionParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.speedEnergyParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.multishotParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.healParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
+    // Graphics quality multiplier (0.3 = low, 0.7 = medium, 1.0 = high)
+    this.qualityMultiplier = 0.7; // Default to medium
+
+    // Initialize all particle pools with manager reference for quality control
+    this.dustParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.trailParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.sparkleParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.explosionParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.speedEnergyParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.multishotParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.healParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
     // Enemy-specific particle pools
-    this.eliteAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.bossAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.explosiveGlowParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.healerAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
+    this.eliteAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.bossAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.explosiveGlowParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
+    this.healerAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
     // Player rank particles
-    this.rankParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
+    this.rankParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE, this);
     // Damage numbers
     this.damageNumbers = [];
   }

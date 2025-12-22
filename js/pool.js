@@ -47,12 +47,18 @@ class ObjectPool {
 
 // Particle Pool
 class ParticlePool {
-  constructor(maxSize = 100) {
+  constructor(maxSize = 100, manager = null) {
     this.particles = [];
     this.maxSize = maxSize;
+    this.manager = manager; // Reference to ParticleManager for quality settings
   }
 
   add(particle) {
+    // Quality control: only add particle based on quality multiplier
+    if (this.manager && Math.random() > this.manager.qualityMultiplier) {
+      return; // Skip this particle
+    }
+
     if (this.particles.length >= this.maxSize) {
       this.particles.shift(); // Remove oldest
     }

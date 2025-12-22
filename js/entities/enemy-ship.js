@@ -326,6 +326,34 @@ class EnemyShip {
       ctx.stroke();
     }
 
+    // Variant visual indicators
+    if (this.variant === 'armored') {
+      // Armored: reinforced plating (darker armor sections)
+      ctx.fillStyle = '#222244';
+      ctx.fillRect(this.x - this.size * 1.3, bodyY - this.size * 0.3, this.size * 0.3, this.size * 1.2);
+      ctx.fillRect(this.x + this.size * 1.0, bodyY - this.size * 0.3, this.size * 0.3, this.size * 1.2);
+    } else if (this.variant === 'fast') {
+      // Fast: speed exhaust trails (orange streaks)
+      ctx.strokeStyle = '#ff9900';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size * 1.5, bodyY - this.size * 0.5 + i * this.size * 0.5);
+        ctx.lineTo(this.x - this.size * 2.2, bodyY - this.size * 0.5 + i * this.size * 0.5);
+        ctx.stroke();
+      }
+    } else if (this.variant === 'regenerating') {
+      // Regenerating: green repair nanites (pulsing glow)
+      const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+      ctx.save();
+      ctx.globalAlpha = pulse * 0.3;
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(this.x, bodyY, this.size * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     this.drawHealthBar(ctx);
   }
 
@@ -399,6 +427,34 @@ class EnemyShip {
       ctx.moveTo(this.x + this.size * 0.4, bodyY);
       ctx.lineTo(this.x + this.size * 1.4, bodyY + this.armSwing);
       ctx.stroke();
+    }
+
+    // Variant visual indicators
+    if (this.variant === 'armored') {
+      // Armored: hull plating (gray reinforcements on sides)
+      ctx.fillStyle = '#555555';
+      ctx.fillRect(this.x - this.size * 0.7, bodyY - this.size * 0.5, this.size * 0.15, this.size);
+      ctx.fillRect(this.x + this.size * 0.55, bodyY - this.size * 0.5, this.size * 0.15, this.size);
+    } else if (this.variant === 'fast') {
+      // Fast: afterburner trails (brighter orange boost exhaust)
+      ctx.strokeStyle = '#ffaa00';
+      ctx.lineWidth = 4;
+      for (let i = 0; i < 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size * 0.8 - i * 0.3 * this.size, bodyY + i * 0.4 * this.size);
+        ctx.lineTo(this.x - this.size * 1.8 - i * 0.3 * this.size, bodyY + i * 0.4 * this.size);
+        ctx.stroke();
+      }
+    } else if (this.variant === 'regenerating') {
+      // Regenerating: repair field (green shield effect)
+      const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+      ctx.save();
+      ctx.globalAlpha = pulse * 0.4;
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(this.x, bodyY, this.size * 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     this.drawHealthBar(ctx);
@@ -475,6 +531,40 @@ class EnemyShip {
       ctx.moveTo(this.x + this.size * 0.7, bodyY);
       ctx.lineTo(this.x + this.size * 1.0, bodyY + this.size * 0.5 - this.armSwing * 0.3);
       ctx.stroke();
+    }
+
+    // Variant visual indicators
+    if (this.variant === 'armored') {
+      // Armored: containment shield plating (metallic bands)
+      ctx.strokeStyle = '#888888';
+      ctx.lineWidth = 4;
+      for (let i = 0; i < 2; i++) {
+        ctx.beginPath();
+        ctx.arc(this.x, bodyY, this.size * (1.3 + i * 0.3), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else if (this.variant === 'fast') {
+      // Fast: plasma venting (orange energy leaks indicating overcharge)
+      const vents = 4;
+      for (let i = 0; i < vents; i++) {
+        const angle = (Math.PI * 2 / vents) * i;
+        const vx = this.x + Math.cos(angle) * this.size * 1.2;
+        const vy = bodyY + Math.sin(angle) * this.size * 1.2;
+        ctx.fillStyle = 'rgba(255, 153, 0, 0.7)';
+        ctx.beginPath();
+        ctx.arc(vx, vy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (this.variant === 'regenerating') {
+      // Regenerating: self-repair matrix (green stabilization field)
+      const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+      ctx.save();
+      ctx.globalAlpha = pulse * 0.35;
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(this.x, bodyY, this.size * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     this.drawHealthBar(ctx);
@@ -556,6 +646,34 @@ class EnemyShip {
       ctx.beginPath();
       ctx.arc(this.x + (Math.random() - 0.5) * this.size, bodyY + this.size, 2, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // Variant visual indicators
+    if (this.variant === 'armored') {
+      // Armored: reinforced medical bay (protective hull plating)
+      ctx.fillStyle = '#444466';
+      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.4, this.size * 0.15, this.size * 1.0);
+      ctx.fillRect(this.x + this.size * 0.35, bodyY - this.size * 0.4, this.size * 0.15, this.size * 1.0);
+    } else if (this.variant === 'fast') {
+      // Fast: emergency response thrusters (orange boost vents)
+      ctx.strokeStyle = '#ff9900';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size * 0.6 - i * 0.2 * this.size, bodyY + this.size * 0.3);
+        ctx.lineTo(this.x - this.size * 1.2 - i * 0.2 * this.size, bodyY + this.size * 0.3);
+        ctx.stroke();
+      }
+    } else if (this.variant === 'regenerating') {
+      // Regenerating: enhanced healing aura (brighter green medical field)
+      const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+      ctx.save();
+      ctx.globalAlpha = pulse * 0.45;
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(this.x, bodyY, this.size * 1.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     this.drawHealthBar(ctx);

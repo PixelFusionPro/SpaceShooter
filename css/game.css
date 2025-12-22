@@ -1291,6 +1291,124 @@ canvas {
   font-size: min(4.5vw, 16px);
 }
 
+.pause-audio-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 15px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 10px 0;
+}
+
+.audio-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.audio-label {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: min(3.8vw, 13px);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.audio-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, rgba(255, 215, 0, 0.3), rgba(255, 215, 0, 0.1));
+  border-radius: 3px;
+  outline: none;
+}
+
+.audio-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #ffd700;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+}
+
+.audio-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #ffd700;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+}
+
+.audio-value {
+  color: #ffd700;
+  font-size: min(3.8vw, 13px);
+  font-weight: bold;
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.btn-audio-toggle {
+  width: 100%;
+  padding: 10px;
+  background: rgba(255, 215, 0, 0.1);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  color: #ffd700;
+  font-size: min(4vw, 14px);
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-audio-toggle:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.btn-audio-toggle:active {
+  transform: scale(0.98);
+}
+
+.btn-audio-toggle.muted {
+  background: rgba(255, 0, 0, 0.1);
+  border-color: rgba(255, 0, 0, 0.3);
+  color: #ff4444;
+}
+
+.quality-select {
+  flex: 1;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-radius: 6px;
+  color: #ffd700;
+  font-size: min(3.8vw, 13px);
+  font-weight: bold;
+  cursor: pointer;
+  outline: none;
+}
+
+.quality-select:hover {
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.quality-select option {
+  background: #001122;
+  color: #ffd700;
+  padding: 5px;
+}
+
 .pause-buttons {
   display: flex;
   flex-direction: column;
