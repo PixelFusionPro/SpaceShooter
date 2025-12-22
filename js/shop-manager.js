@@ -129,13 +129,46 @@ class ShopManager {
       // Ammo: add packSize quantity
       const quantity = item.packSize || 50;
       this.inventoryManager.addItem(itemId, quantity);
-    } else if (item.type === 'consumable' || item.type === 'upgrade') {
+    } else if (item.type === 'consumable' || item.type === 'upgrade' || item.type === 'fortress_consumable') {
       this.inventoryManager.addItem(itemId, 1);
     } else {
       this.inventoryManager.addItem(itemId, 1);
     }
 
     return { success: true, message: `Purchased ${item.name}!` };
+  }
+
+  // Use fortress repair kit
+  useFortressRepairKit(itemId) {
+    const item = this.shopItems[itemId];
+    if (!item || item.type !== 'fortress_consumable') {
+      return { success: false, message: 'Not a fortress consumable' };
+    }
+
+    // Check if player has the item
+    const quantity = this.inventoryManager.getItemQuantity(itemId);
+    if (quantity <= 0) {
+      return { success: false, message: `You don't have any ${item.name}` };
+    }
+
+    // Apply repair to fortress if game is running
+    if (typeof Game !== 'undefined' && Game && Game.fortressManager) {
+      Game.fortressManager.repairAll(item.repairAmount);
+
+      // Track repair for achievements
+      if (Game.achievementManager) {
+        // Count number of structures repaired
+        const structuresRepaired = Game.fortressManager.structures.filter(s => s.health < s.maxHealth).length;
+        for (let i = 0; i < structuresRepaired; i++) {
+          Game.achievementManager.trackStructureRepair();
+        }
+      }
+    }
+
+    // Remove item from inventory
+    this.inventoryManager.removeItem(itemId, 1);
+
+    return { success: true, message: `Used ${item.name}! Structures repaired.` };
   }
 
   // Use consumable item

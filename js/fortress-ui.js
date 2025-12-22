@@ -98,13 +98,14 @@ function renderFortressStructures() {
           ${currentLevel > 0 ? `<div class="f1-structure-level">Level ${currentLevel + 1}</div>` : ''}
         </div>
         <div class="f1-structure-health">
-          <div class="f1-health-text" style="color: rgba(255,255,255,0.6);">Permanent Upgrade</div>
+          <div class="f1-health-text" style="color: rgba(255,255,255,0.6);"><strong>Global Upgrade</strong> - Affects ALL ${structInfo.name}s</div>
           ${currentLevel > 0 ? `<div class="f1-health-text" style="color: #FFD700; margin-top: 4px;">Level ${currentLevel + 1}: +${currentLevel * (config.UPGRADE_HEALTH_BONUS || 50)} HP</div>` : `<div class="f1-health-text" style="color: rgba(255,255,255,0.5); margin-top: 4px;">Level 1: Base stats</div>`}
           ${structInfo.type === 'tower' && currentLevel > 0 ? `<div class="f1-health-text" style="color: #FFD700; margin-top: 4px;">Damage: +${(currentLevel * (config.UPGRADE_DAMAGE_BONUS || 0.5)).toFixed(1)} dmg</div>` : ''}
         </div>
         <div class="f1-structure-stats">
           <div class="f1-stat">Base Health: ${config.HEALTH} HP</div>
           <div class="f1-stat">Damage Resistance: ${(config.DAMAGE_RESISTANCE * 100).toFixed(0)}%</div>
+          <div class="f1-stat">Deterioration: -${config.DETERIORATION_RATE.toFixed(2)} HP/s</div>
           <div class="f1-stat">Slow Effect: ${(config.SLOW_EFFECT * 100).toFixed(0)}%</div>
           ${structInfo.type === 'tower' ? `<div class="f1-stat">Base Damage: ${config.DAMAGE || 1.0} dmg</div>` : ''}
           ${structInfo.type === 'tower' ? `<div class="f1-stat">Range: ${config.RANGE || 200} px</div>` : ''}
@@ -112,7 +113,7 @@ function renderFortressStructures() {
         </div>
         <div class="f1-structure-footer">
           <button class="f1-upgrade-btn" onclick="event.stopPropagation(); upgradeStructureType('${structInfo.type}')" ${!canAfford ? 'disabled' : ''}>
-            Upgrade (💰 ${upgradeCost})
+            Upgrade All (💰 ${upgradeCost})
           </button>
         </div>
       `;
@@ -167,6 +168,7 @@ function renderFortressStructures() {
           <div class="f1-health-fill" style="width: ${healthPercent * 100}%"></div>
         </div>
         <div class="f1-health-text">${Math.ceil(structure.health)} / ${Math.ceil(structure.maxHealth)} HP</div>
+        ${structure.deteriorationRate > 0 ? `<div class="f1-health-text" style="color: #ff9999; font-size: 11px;">-${structure.deteriorationRate.toFixed(2)} HP/s decay</div>` : ''}
         ${!isActive ? '<div class="f1-status-destroyed">Destroyed</div>' : ''}
       </div>
       <div class="f1-structure-stats">
@@ -178,7 +180,7 @@ function renderFortressStructures() {
       </div>
       <div class="f1-structure-footer">
         <button class="f1-upgrade-btn" onclick="event.stopPropagation(); upgradeStructure(${index})" ${!canAfford ? 'disabled' : ''}>
-          Upgrade (💰 ${upgradeCost})
+          Upgrade All ${typeName}s (💰 ${upgradeCost})
         </button>
       </div>
     `;

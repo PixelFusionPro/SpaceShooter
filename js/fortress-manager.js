@@ -195,6 +195,28 @@ class FortressStructure {
     const healthPercent = this.getHealthPercent();
     const opacity = Math.max(0.3, healthPercent);
 
+    // Add glow effect for upgraded structures
+    if (this.upgradeLevel > 0) {
+      // Determine glow color based on upgrade tier
+      let glowColor;
+      if (this.upgradeLevel <= 5) {
+        glowColor = '#4169E1'; // Royal blue for low tier (1-5)
+      } else if (this.upgradeLevel <= 10) {
+        glowColor = '#FFD700'; // Gold for mid tier (6-10)
+      } else {
+        glowColor = '#9370DB'; // Medium purple for high tier (11-15)
+      }
+
+      // Glow intensity increases with upgrade level
+      const glowIntensity = Math.min(15, 3 + this.upgradeLevel);
+      ctx.shadowBlur = glowIntensity;
+      ctx.shadowColor = glowColor;
+
+      // Pulsing effect (subtle)
+      const pulseOffset = Math.sin(Date.now() / 1000) * 2;
+      ctx.shadowBlur += pulseOffset;
+    }
+
     // Draw structure based on type
     switch (this.type) {
       case 'fence':
@@ -213,6 +235,10 @@ class FortressStructure {
         this.drawGate(ctx, healthPercent, opacity);
         break;
     }
+
+    // Reset shadow for health bar
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
 
     // Health bar
     this.drawHealthBar(ctx);
@@ -325,6 +351,23 @@ class FortressStructure {
 
   drawTower(ctx, healthPercent, opacity) {
     ctx.globalAlpha = opacity;
+
+    // Draw range indicator first (underneath tower)
+    if (this.range) {
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = '#FFD700';
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.05)';
+      ctx.lineWidth = 1;
+      const centerX = this.x + this.width / 2;
+      const centerY = this.y + this.height / 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, this.range, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      ctx.globalAlpha = opacity; // Restore opacity for tower
+    }
 
     // Tower base
     ctx.fillStyle = '#696969';

@@ -17,6 +17,8 @@ class ParticleManager {
     this.healerAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     // Player rank particles
     this.rankParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
+    // Damage numbers
+    this.damageNumbers = [];
   }
 
   // Spawn dust particles (footsteps)
@@ -295,7 +297,7 @@ class ParticleManager {
     for (let i = 0; i < particleCount; i++) {
       const angle = (Math.PI * 2 / 6) * (this.healerAuraParticles.particles.length % 6);
       const offset = Math.sin(performance.now() / 200 + i) * 5;
-      
+
       this.healerAuraParticles.add({
         x: x + Math.cos(angle) * (25 + offset),
         y: y + Math.sin(angle) * (25 + offset),
@@ -308,6 +310,20 @@ class ParticleManager {
         float: true
       });
     }
+  }
+
+  // Spawn damage number (tower hits, etc.)
+  spawnDamageNumber(x, y, damage, isTower = false) {
+    this.damageNumbers.push({
+      x: x + (Math.random() - 0.5) * 10,
+      y: y,
+      damage: Math.ceil(damage * 10) / 10, // Round to 1 decimal
+      dy: -1.5, // Float upward
+      life: 40,
+      maxLife: 40,
+      color: isTower ? '#FFD700' : '#FF4444', // Gold for tower, red for other
+      isTower: isTower
+    });
   }
 
   // Update all particles
@@ -325,6 +341,16 @@ class ParticleManager {
     this.bossAuraParticles.update();
     this.explosiveGlowParticles.update();
     this.healerAuraParticles.update();
+
+    // Update damage numbers
+    for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+      const num = this.damageNumbers[i];
+      num.y += num.dy;
+      num.life--;
+      if (num.life <= 0) {
+        this.damageNumbers.splice(i, 1);
+      }
+    }
   }
 
   // Draw all particles
@@ -343,6 +369,22 @@ class ParticleManager {
     // Draw rank particles after enemies but before sparkles
     this.rankParticles.draw(ctx);
     this.sparkleParticles.draw(ctx); // Draw sparkles last (on top)
+
+    // Draw damage numbers (on top of everything)
+    ctx.save();
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const num of this.damageNumbers) {
+      const opacity = num.life / num.maxLife;
+      ctx.globalAlpha = opacity;
+      // Add shadow for better visibility
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillStyle = num.color;
+      ctx.fillText(num.damage.toFixed(1), num.x, num.y);
+    }
+    ctx.restore();
   }
 
   // Clear all particles
@@ -359,5 +401,6 @@ class ParticleManager {
     this.bossAuraParticles.clear();
     this.explosiveGlowParticles.clear();
     this.healerAuraParticles.clear();
+    this.damageNumbers = [];
   }
 }

@@ -302,6 +302,12 @@ class SpaceShooterGame {
     // Track damage dealt and critical hits for achievements
     this.achievementManager.trackDamageDealt(damageDealt);
 
+    // Spawn damage number for tower shots
+    const isTowerShot = bullet && bullet.towerShot;
+    if (isTowerShot && this.particleManager) {
+      this.particleManager.spawnDamageNumber(enemy.x, enemy.y, damageDealt, true);
+    }
+
     // Critical hit visual feedback
     const isCritical = bullet && bullet.critical;
     if (isCritical) {
@@ -572,16 +578,30 @@ class SpaceShooterGame {
     }
   }
 
-  showFortressUnlockNotification(fortressName) {
+  showFortressUnlockNotification(fortressName, structureType = null) {
     if (this.achievementNotification) {
-      this.achievementNotification.textContent = `🏰 ${fortressName} Built!`;
+      // Get structure stats for enhanced notification
+      let stats = '';
+      if (structureType) {
+        const config = CONFIG.FORTRESS[structureType.toUpperCase()];
+        if (config) {
+          stats = `\n${config.HEALTH} HP | ${(config.DAMAGE_RESISTANCE * 100).toFixed(0)}% Resist`;
+          if (structureType === 'tower') {
+            stats += ` | ${config.DAMAGE} DMG`;
+          }
+        }
+      }
+
+      this.achievementNotification.textContent = `🏰 ${fortressName} Built!${stats}`;
       this.achievementNotification.style.display = 'block';
       this.achievementNotification.style.background = 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)';
+      this.achievementNotification.style.whiteSpace = 'pre-line'; // Allow multiline
 
       setTimeout(() => {
         this.achievementNotification.style.display = 'none';
         this.achievementNotification.style.background = ''; // Reset to default
-      }, 2500);
+        this.achievementNotification.style.whiteSpace = ''; // Reset
+      }, 3500); // Increased duration for more info
     }
   }
 
@@ -645,7 +665,7 @@ class SpaceShooterGame {
         this.fortressManager.addStructure('fence', rightFenceX, rightFenceY, fenceHeight, rightFenceHeight);
       }
 
-      this.showFortressUnlockNotification('Wooden Fence Perimeter');
+      this.showFortressUnlockNotification('Wooden Fence Perimeter', 'fence');
     }
 
     // Tier 2: Wave 15 - Barricade corners
@@ -670,7 +690,7 @@ class SpaceShooterGame {
       this.fortressManager.addStructure('barricade', bottomLeftX, bottomLeftY, barricadeSize, barricadeSize);
       this.fortressManager.addStructure('barricade', bottomRightX, bottomRightY, barricadeSize, barricadeSize);
 
-      this.showFortressUnlockNotification('Corner Barricades');
+      this.showFortressUnlockNotification('Corner Barricades', 'barricade');
     }
 
     // Tier 3: Wave 30 - Gate entrances
@@ -687,7 +707,7 @@ class SpaceShooterGame {
       this.fortressManager.addStructure('gate', centerX - gateWidth/2, topGateY, gateWidth, gateHeight);
       this.fortressManager.addStructure('gate', centerX - gateWidth/2, bottomGateY, gateWidth, gateHeight);
 
-      this.showFortressUnlockNotification('Reinforced Gates');
+      this.showFortressUnlockNotification('Reinforced Gates', 'gate');
     }
 
     // Tier 4: Wave 50 - Stone walls (continuous, no gaps)
@@ -722,7 +742,7 @@ class SpaceShooterGame {
         this.fortressManager.addStructure('wall', rightWallX, rightWallY, wallHeight, rightWallHeight);
       }
 
-      this.showFortressUnlockNotification('Stone Wall Fortifications');
+      this.showFortressUnlockNotification('Stone Wall Fortifications', 'wall');
     }
 
     // Tier 5: Wave 75 - Guard towers at fence intersection corners
@@ -777,7 +797,7 @@ class SpaceShooterGame {
       this.fortressManager.addStructure('tower', bottomLeftX, bottomLeftY, towerSize, towerSize);
       this.fortressManager.addStructure('tower', bottomRightX, bottomRightY, towerSize, towerSize);
 
-      this.showFortressUnlockNotification('Guard Tower Defense Grid');
+      this.showFortressUnlockNotification('Guard Tower Defense Grid', 'tower');
     }
   }
 

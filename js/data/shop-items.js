@@ -776,6 +776,41 @@ const SHOP_ITEMS = {
     rankRequirement: 'Legend'
   },
 
+  // Fortress Consumables (Repair Kits) - 3 total
+  'repair_kit_basic': {
+    id: 'repair_kit_basic',
+    name: 'Basic Repair Kit',
+    type: 'fortress_consumable',
+    icon: '🔧',
+    description: 'Repairs all structures by 50 HP',
+    price: 200,
+    repairAmount: 50,
+    stackable: true,
+    tier: 2
+  },
+  'repair_kit_advanced': {
+    id: 'repair_kit_advanced',
+    name: 'Advanced Repair Kit',
+    type: 'fortress_consumable',
+    icon: '🛠️',
+    description: 'Repairs all structures by 150 HP',
+    price: 500,
+    repairAmount: 150,
+    stackable: true,
+    tier: 3
+  },
+  'repair_kit_complete': {
+    id: 'repair_kit_complete',
+    name: 'Complete Repair Kit',
+    type: 'fortress_consumable',
+    icon: '⚙️',
+    description: 'Fully repairs all structures to max HP',
+    price: 1500,
+    repairAmount: Infinity,
+    stackable: true,
+    tier: 4
+  },
+
   // Upgrades - 20 total
   // Balanced for permanent stackable improvements (cheaper than weapons/armor)
   // TIER 1 (Early Game - Basic)
