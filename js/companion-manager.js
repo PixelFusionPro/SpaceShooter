@@ -144,13 +144,14 @@ class Companion {
       const bullet = bulletPool.get();
       if (bullet) {
         // Companions use default ammo (no special ammo types)
-        bullet.init(this.x, this.y, angle, null);
+        bullet.init(this.x, this.y, angle, null, null);
         // Set companion bullet damage (override default damage)
         bullet.damage = this.damage;
-        // Make companion bullets visually distinct (cyan/blue color)
-        bullet.color = '#00d4ff'; // Cyan color for companion bullets
-        bullet.trailColor = '#0080ff'; // Blue trail
-        bullet.isPlayerBullet = false; // Mark as companion bullet
+        // Make companion bullets visually distinct (orange/red color)
+        bullet.color = '#ff6b35'; // Orange color for companion bullets
+        bullet.trailColor = '#d45028'; // Orange-red trail
+        bullet.size = CONFIG.BULLET.SIZE * 0.8; // Slightly smaller
+        bullet.isPlayerBullet = true; // Mark as friendly bullet (will hit enemies)
       }
     } else {
       // Fallback: Direct damage if no bullet pool (for backwards compatibility)
@@ -158,7 +159,7 @@ class Companion {
 
       if (target.health <= 0) {
         const hitAngle = Math.atan2(target.y - this.y, target.x - this.x);
-        enemyManager.killZombie(
+        enemyManager.killEnemy(
           enemyManager.enemies.indexOf(target),
           hitAngle,
           null
@@ -487,7 +488,7 @@ class CompanionManager {
       if (companion.dying) continue;
 
       for (const enemy of enemies) {
-        if (zombie.dying) continue;
+        if (enemy.dying) continue;
 
         const dist = Math.hypot(companion.x - enemy.x, companion.y - enemy.y);
         if (dist < companion.size + enemy.size) {

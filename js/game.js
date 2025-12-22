@@ -217,28 +217,12 @@ class SpaceShooterGame {
       bulletCount = boosts.multishot;
     }
 
-    // Consume ammo for all bullets
+    // Check if we have enough ammo before firing
     if (ammoType && equipped.ammo) {
       const ammoNeeded = bulletCount;
       const ammoQuantity = this.inventoryManager.getItemQuantity(equipped.ammo);
 
-      if (ammoQuantity >= ammoNeeded) {
-        // Enough ammo - consume it
-        this.inventoryManager.removeItem(equipped.ammo, ammoNeeded);
-        ammoConsumed = true;
-
-        // Check if this was the last ammo
-        const remainingAmmo = this.inventoryManager.getItemQuantity(equipped.ammo);
-        if (remainingAmmo === 0 && !this.ammoDepletedNotified) {
-          this.showAmmoDepletedNotification(ammoType.name);
-          this.ammoDepletedNotified = true;
-
-          // Reset notification flag after 3 seconds
-          setTimeout(() => {
-            this.ammoDepletedNotified = false;
-          }, 3000);
-        }
-      } else {
+      if (ammoQuantity < ammoNeeded) {
         // Not enough ammo - use default ammo
         ammoType = null;
 
@@ -259,14 +243,38 @@ class SpaceShooterGame {
     // Get upgrade boosts for bullet stats (crit chance, crit multiplier)
     const bulletBoosts = this.shopManager.getEquippedStatBoosts();
 
+    let bulletsCreated = 0;
     for (let i = 0; i < bulletCount; i++) {
       const bullet = this.bulletPool.get();
+      if (!bullet) continue; // Pool exhausted, skip
+
       const spreadAngle = bulletCount > 1 ? angle + (i - 1) * 0.15 : angle;
       bullet.init(this.player.x, this.player.y, spreadAngle, ammoType, bulletBoosts);
       bullet.isPlayerBullet = true; // Mark as player bullet
 
+      // Consume ammo AFTER successful bullet creation
+      if (ammoType && equipped.ammo) {
+        this.inventoryManager.removeItem(equipped.ammo, 1);
+        ammoConsumed = true;
+      }
+
       // Track bullet fired
       this.statisticsManager.trackBulletFired();
+      bulletsCreated++;
+    }
+
+    // Check if ammo depleted after firing
+    if (ammoType && equipped.ammo && ammoConsumed) {
+      const remainingAmmo = this.inventoryManager.getItemQuantity(equipped.ammo);
+      if (remainingAmmo === 0 && !this.ammoDepletedNotified) {
+        this.showAmmoDepletedNotification(ammoType.name);
+        this.ammoDepletedNotified = true;
+
+        // Reset notification flag after 3 seconds
+        setTimeout(() => {
+          this.ammoDepletedNotified = false;
+        }, 3000);
+      }
     }
 
     // Spawn multishot energy particles when multishot is active
@@ -281,22 +289,53 @@ class SpaceShooterGame {
   handleBulletCollisions() {
     this.enemyManager.checkBulletCollisions(
       this.bulletPool,
-      (enemy, index, damageDealt) => this.onEnemyHit(enemy, index, damageDealt)
+      (enemy, index, damageDealt, bullet) => this.onEnemyHit(enemy, index, damageDealt, bullet)
     );
   }
 
-  onEnemyHit(enemy, index, damageDealt) {
+  onEnemyHit(enemy, index, damageDealt, bullet = null) {
     // Track bullet hit
     this.statisticsManager.trackBulletHit();
 
-    // Hit flash effect
-    this.ctx.save();
-    this.ctx.globalAlpha = 0.5;
-    this.ctx.fillStyle = 'white';
-    this.ctx.beginPath();
-    this.ctx.arc(enemy.x, enemy.y, enemy.size * 1.2, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.restore();
+    // Critical hit visual feedback
+    const isCritical = bullet && bullet.critical;
+    if (isCritical) {
+      // Golden flash for critical hits
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.8;
+      this.ctx.fillStyle = '#FFD700';
+      this.ctx.beginPath();
+      this.ctx.arc(enemy.x, enemy.y, enemy.size * 1.8, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+
+      // Spawn critical hit particles (gold sparkles)
+      if (this.particleManager) {
+        for (let i = 0; i < 8; i++) {
+          const angle = (Math.PI * 2 / 8) * i;
+          const speed = 2 + Math.random() * 2;
+          this.particleManager.sparkleParticles.add({
+            x: enemy.x,
+            y: enemy.y,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            life: 20,
+            maxLife: 20,
+            size: Math.random() * 3 + 2,
+            color: '#FFD700'
+          });
+        }
+      }
+    } else {
+      // Normal hit flash effect
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.5;
+      this.ctx.fillStyle = 'white';
+      this.ctx.beginPath();
+      this.ctx.arc(enemy.x, enemy.y, enemy.size * 1.2, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+    }
 
     // Apply lifesteal if player has it from upgrades
     const boosts = this.shopManager.getEquippedStatBoosts();

@@ -76,17 +76,15 @@ class FortressStructure {
     
     // Shoot at target
     const angle = Math.atan2(dy, dx);
-    const bullet = this.bulletPool.acquire();
-    
+    const bullet = this.bulletPool.get();
+
     if (bullet) {
-      bullet.init(
-        towerCenterX,
-        towerCenterY,
-        Math.cos(angle) * CONFIG.BULLET.SPEED,
-        Math.sin(angle) * CONFIG.BULLET.SPEED,
-        this.damage
-      );
-      bullet.isPlayerBullet = false; // Tower bullets are not player bullets
+      // Correct init signature: init(x, y, angle, ammoType, upgradeBoosts)
+      bullet.init(towerCenterX, towerCenterY, angle, null, null);
+      bullet.damage = this.damage; // Set tower damage after init
+      bullet.color = '#ffaa00'; // Orange color for tower bullets
+      bullet.trailColor = '#ff6600'; // Orange-red trail
+      bullet.isPlayerBullet = true; // Mark as friendly bullet (prevents damaging player structures)
       this.lastShotTime = now;
     }
   }
@@ -654,10 +652,11 @@ class FortressManager {
   handleBulletCollisions(bulletPool) {
     for (const bullet of bulletPool.getInUse()) {
       if (!bullet.active) continue;
-      
-      // Player bullets pass through structures, only block companion bullets
+
+      // Friendly bullets (player, companion, tower) pass through structures
+      // Only enemy bullets (if any) would collide with structures
       if (bullet.isPlayerBullet) {
-        continue; // Skip collision check for player bullets
+        continue; // Skip collision check for friendly bullets
       }
 
       for (const structure of this.structures) {
