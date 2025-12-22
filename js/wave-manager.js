@@ -136,7 +136,7 @@ class WaveManager {
     const waveMultiplier = 1 + Math.pow(this.wave, 1.2) / 50;
     const scoreMultiplier = 1 + score / 1000;
     let currencyGain = Math.floor(base * waveMultiplier * scoreMultiplier);
-    
+
     // Apply coin multiplier from upgrades
     if (shopManager) {
       const boosts = shopManager.getEquippedStatBoosts();
@@ -147,10 +147,19 @@ class WaveManager {
     const rankMultiplier = scoreManager.getRankCurrencyMultiplier();
     currencyGain = Math.floor(currencyGain * rankMultiplier);
 
+    // Milestone wave bonus rewards
+    let milestoneBonus = 0;
+    let isMilestone = this.isMilestoneWave();
+    if (isMilestone) {
+      // Bonus coins for milestone waves (50% of base reward)
+      milestoneBonus = Math.floor(currencyGain * 0.5);
+      currencyGain += milestoneBonus;
+    }
+
     scoreManager.addCurrency(currencyGain);
 
-    // Show wave recap
-    this.showWaveRecap(currencyGain);
+    // Show wave recap (with milestone indicator)
+    this.showWaveRecap(currencyGain, isMilestone, milestoneBonus);
 
     // Advance to next wave after delay
     setTimeout(() => {
@@ -160,16 +169,22 @@ class WaveManager {
   }
 
   // Show wave completion recap
-  showWaveRecap(currencyGain) {
+  showWaveRecap(currencyGain, isMilestone = false, milestoneBonus = 0) {
     if (!this.waveRecapElement) return;
 
-    this.waveRecapElement.textContent =
-      `Wave ${this.wave} Complete!\n+${currencyGain} Coins`;
+    let message = `Wave ${this.wave} Complete!`;
+    if (isMilestone) {
+      message = `🎉 MILESTONE: Wave ${this.wave} Complete! 🎉\n+${currencyGain} Coins (${milestoneBonus} bonus!)`;
+    } else {
+      message = `Wave ${this.wave} Complete!\n+${currencyGain} Coins`;
+    }
+
+    this.waveRecapElement.textContent = message;
     this.waveRecapElement.style.display = 'flex';
 
     setTimeout(() => {
       this.waveRecapElement.style.display = 'none';
-    }, 2500);
+    }, isMilestone ? 3500 : 2500); // Show milestone messages longer
   }
 
   // Check if wave is complete

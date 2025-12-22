@@ -68,9 +68,9 @@ class SpaceShooterGame {
     this.scoreManager = new ScoreManager();
     this.statisticsManager = new StatisticsManager();
     this.inventoryManager = new InventoryManager();
-    this.shopManager = new ShopManager(this.inventoryManager, this.scoreManager);
+    this.achievementManager = new AchievementManager(this.scoreManager);
+    this.shopManager = new ShopManager(this.inventoryManager, this.scoreManager, this.achievementManager);
     this.powerupManager = new PowerupManager(canvas, this.particleManager);
-    this.achievementManager = new AchievementManager();
     this.waveManager = new WaveManager(canvas);
     this.enemyManager = new EnemyManager(canvas, this.particleManager);
     this.fortressManager = new FortressManager(canvas);
@@ -150,6 +150,7 @@ class SpaceShooterGame {
 
     // Start statistics tracking
     this.statisticsManager.startGame();
+    this.achievementManager.trackGamePlayed();
     const equipped = this.inventoryManager.getEquippedItems();
     this.statisticsManager.updateEquipment(equipped.weapon, equipped.armor);
 
@@ -260,6 +261,7 @@ class SpaceShooterGame {
 
       // Track bullet fired
       this.statisticsManager.trackBulletFired();
+      this.achievementManager.trackBulletFired();
       bulletsCreated++;
     }
 
@@ -297,9 +299,13 @@ class SpaceShooterGame {
     // Track bullet hit
     this.statisticsManager.trackBulletHit();
 
+    // Track damage dealt and critical hits for achievements
+    this.achievementManager.trackDamageDealt(damageDealt);
+
     // Critical hit visual feedback
     const isCritical = bullet && bullet.critical;
     if (isCritical) {
+      this.achievementManager.trackCriticalHit();
       // Golden flash for critical hits
       this.ctx.save();
       this.ctx.globalAlpha = 0.8;
@@ -800,6 +806,7 @@ class SpaceShooterGame {
       this.player.health -= damage;
       this.player.takeHit();
       this.flashDamage();
+      this.achievementManager.trackDamageTaken(damage);
     }
 
     // Update companions
@@ -858,10 +865,15 @@ class SpaceShooterGame {
     const aliveEnemies = this.enemyManager.getAliveCount();
     if (this.waveManager.isWaveComplete(aliveEnemies)) {
       const scoreData = this.scoreManager.getData();
+      const currencyBefore = this.scoreManager.currency;
       this.waveManager.completeWave(scoreData.score, this.scoreManager, this.shopManager);
+      const currencyAfter = this.scoreManager.currency;
+      const coinsEarned = currencyAfter - currencyBefore;
 
-      // Track wave completion in statistics
+      // Track wave completion in statistics and achievements
       this.statisticsManager.waveCompleted();
+      this.achievementManager.trackWaveComplete();
+      this.achievementManager.trackCoinsEarned(coinsEarned);
 
       // Restore all fortress structures to full health
       this.fortressManager.restoreAll();

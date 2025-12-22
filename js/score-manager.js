@@ -60,14 +60,14 @@ class ScoreManager {
   getRankCurrencyMultiplier() {
     const rank = this.getPersistentRank();
     switch(rank) {
-      case 'Legend': return 1.20;
-      case 'Elite': return 1.10;
-      case 'Veteran': return 1.05;
+      case 'Legend': return 1.25;    // 25% bonus
+      case 'Elite': return 1.15;     // 15% bonus
+      case 'Veteran': return 1.08;   // 8% bonus
       default: return 1.0;
     }
   }
 
-  // Update persistent rank based on game stats
+  // Update persistent rank based on comprehensive game stats
   updatePersistentRank(wave, kills) {
     this.persistentRank.gamesPlayed++;
     this.persistentRank.totalScore += this.score;
@@ -78,16 +78,27 @@ class ScoreManager {
       this.persistentRank.bestWave = wave;
     }
 
-    // Calculate persistent rank based on cumulative stats
-    const cumulativeScore = this.persistentRank.totalScore;
+    // Calculate persistent rank based on comprehensive criteria
+    // Uses combination of: best wave reached, total kills, games played
+    // This provides clear progression that's easier to understand
     let newRank = 'Soldier';
+    const bestWave = this.persistentRank.bestWave;
+    const totalKills = this.persistentRank.totalKills;
+    const gamesPlayed = this.persistentRank.gamesPlayed;
 
-    if (cumulativeScore >= CONFIG.PROGRESSION.RANK_LEGEND * 10) {
-      newRank = 'Legend';
-    } else if (cumulativeScore >= CONFIG.PROGRESSION.RANK_ELITE * 5) {
-      newRank = 'Elite';
-    } else if (cumulativeScore >= CONFIG.PROGRESSION.RANK_VETERAN * 3) {
+    // Veteran: Reach wave 25 OR 500 total kills OR play 10 games
+    if (bestWave >= 25 || totalKills >= 500 || gamesPlayed >= 10) {
       newRank = 'Veteran';
+    }
+
+    // Elite: Reach wave 50 OR 2,000 total kills OR play 25 games
+    if (bestWave >= 50 || totalKills >= 2000 || gamesPlayed >= 25) {
+      newRank = 'Elite';
+    }
+
+    // Legend: Reach wave 100 OR 5,000 total kills OR play 50 games
+    if (bestWave >= 100 || totalKills >= 5000 || gamesPlayed >= 50) {
+      newRank = 'Legend';
     }
 
     // Update highest rank achieved
@@ -99,7 +110,10 @@ class ScoreManager {
       this.persistentRank.highestRank = newRank;
       this.persistentRank.rankHistory.push({
         rank: newRank,
-        achievedAt: Date.now()
+        achievedAt: Date.now(),
+        bestWave: bestWave,
+        totalKills: totalKills,
+        gamesPlayed: gamesPlayed
       });
     }
 

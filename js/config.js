@@ -54,13 +54,13 @@ const CONFIG = {
 
   // Progression
   PROGRESSION: {
-    RANK_VETERAN: 250,    // 5x increase (was 50)
-    RANK_ELITE: 1000,     // 10x increase (was 100)
-    RANK_LEGEND: 5000,    // 25x increase (was 200)
+    RANK_VETERAN: 250,    // Session rank thresholds
+    RANK_ELITE: 1000,
+    RANK_LEGEND: 5000,
     COMBO_WINDOW: 2000, // milliseconds
     COMBO_THRESHOLD: 3,
     COMBO_BONUS: 5,
-    CURRENCY_BASE: 10, // Increased from 5 for better early game economy
+    CURRENCY_BASE: 15, // Increased to 15 for better economy pacing
     CURRENCY_SCALING: true, // Enable exponential scaling
     ACHIEVEMENT_VETERAN_WAVE: 10,
   },

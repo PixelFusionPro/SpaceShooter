@@ -246,7 +246,7 @@ const SHOP_ITEMS = {
     type: 'weapon',
     icon: '✨',
     description: 'Ultimate weapon, +3 damage, 4 bullets',
-    price: 35000,
+    price: 18000,
     statBoost: { multishot: 4, fireRate: 0.75, damage: 3 },
     weaponModel: 'quantum_rifle',
     tier: 6,
@@ -259,7 +259,7 @@ const SHOP_ITEMS = {
     type: 'weapon',
     icon: '💫',
     description: 'Devastating power, +4 damage, very slow',
-    price: 30000,
+    price: 15000,
     statBoost: { damage: 4, fireRate: 2.2 },
     weaponModel: 'antimatter_cannon',
     tier: 6,
@@ -272,7 +272,7 @@ const SHOP_ITEMS = {
     type: 'weapon',
     icon: '🌌',
     description: 'Reality-tearing weapon, +2.5 damage, 5 bullets',
-    price: 40000,
+    price: 20000,
     statBoost: { multishot: 5, fireRate: 1.0, damage: 2.5 },
     weaponModel: 'void_shredder',
     tier: 6,
@@ -285,7 +285,7 @@ const SHOP_ITEMS = {
     type: 'weapon',
     icon: '☢️',
     description: 'Ultimate destruction, +3.5 damage, 3 bullets',
-    price: 50000,
+    price: 12500,
     statBoost: { multishot: 3, fireRate: 0.85, damage: 3.5 },
     weaponModel: 'omega_destroyer',
     tier: 6,
@@ -531,7 +531,7 @@ const SHOP_ITEMS = {
     type: 'armor',
     icon: '✨',
     description: '+50 max health, 2x regen',
-    price: 40000,
+    price: 20000,
     statBoost: { maxHealth: 50, regenRate: 2.0 },
     armorModel: 'quantum',
     tier: 6,
@@ -748,7 +748,7 @@ const SHOP_ITEMS = {
     type: 'consumable',
     icon: '⏰',
     description: 'Instant full health restore (one-time use)',
-    price: 25000,
+    price: 12500,
     effect: { heal: 999 },
     tier: 6,
     rankRequirement: 'Legend'
@@ -759,7 +759,7 @@ const SHOP_ITEMS = {
     type: 'consumable',
     icon: '🛡️',
     description: 'Invincibility for 30 seconds',
-    price: 30000,
+    price: 15000,
     effect: { shield: 30000 },
     tier: 6,
     rankRequirement: 'Legend'
@@ -770,7 +770,7 @@ const SHOP_ITEMS = {
     type: 'consumable',
     icon: '🔥',
     description: 'Extreme power boost for 15 seconds',
-    price: 35000,
+    price: 18000,
     effect: { damage: 5, fireRate: 0.4, speed: 1.5, duration: 15000 },
     tier: 6,
     rankRequirement: 'Legend'
@@ -800,7 +800,7 @@ const SHOP_ITEMS = {
     price: 150,
     statBoost: { fireRate: 0.9 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 20,
     tier: 1
   },
   'upgrade_speed': {
@@ -812,7 +812,7 @@ const SHOP_ITEMS = {
     price: 120,
     statBoost: { speed: 1.1 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 20,
     tier: 1
   },
   'upgrade_damage': {
@@ -824,7 +824,7 @@ const SHOP_ITEMS = {
     price: 180,
     statBoost: { damage: 1 },
     stackable: true,
-    maxStacks: 20,
+    maxStacks: 50,
     tier: 1
   },
   // TIER 2 (Early-Mid Game - Good)
@@ -849,7 +849,7 @@ const SHOP_ITEMS = {
     price: 450,
     statBoost: { fireRate: 0.85 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 20,
     tier: 2
   },
   'upgrade_regen': {
@@ -861,7 +861,7 @@ const SHOP_ITEMS = {
     price: 400,
     statBoost: { regenRate: 1.2 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 20,
     tier: 2
   },
   'upgrade_speed_plus': {
@@ -873,7 +873,7 @@ const SHOP_ITEMS = {
     price: 380,
     statBoost: { speed: 1.15 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 20,
     tier: 2
   },
   'upgrade_coin_gain': {
@@ -898,7 +898,7 @@ const SHOP_ITEMS = {
     price: 600,
     statBoost: { damage: 2 },
     stackable: true,
-    maxStacks: 20,
+    maxStacks: 50,
     tier: 3
   },
   'upgrade_multishot': {
@@ -922,7 +922,7 @@ const SHOP_ITEMS = {
     price: 700,
     statBoost: { regenRate: 1.3 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 50,
     tier: 3
   },
   'upgrade_score_multiplier': {
@@ -934,7 +934,7 @@ const SHOP_ITEMS = {
     price: 550,
     statBoost: { scoreMultiplier: 1.15 },
     stackable: true,
-    maxStacks: 20,
+    maxStacks: 50,
     tier: 3
   },
   'upgrade_crit_chance': {
@@ -946,7 +946,7 @@ const SHOP_ITEMS = {
     price: 750,
     statBoost: { critChance: 0.1, critMultiplier: 2 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 50,
     tier: 3
   },
   // TIER 4 (Mid-Late Game - Excellent)
@@ -971,7 +971,7 @@ const SHOP_ITEMS = {
     price: 1200,
     statBoost: { critMultiplier: 0.5 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 50,
     tier: 4
   },
   'upgrade_coin_gain_plus': {
@@ -983,7 +983,7 @@ const SHOP_ITEMS = {
     price: 1000,
     statBoost: { coinMultiplier: 1.2 },
     stackable: true,
-    maxStacks: 20,
+    maxStacks: 50,
     tier: 4
   },
   'upgrade_piercing': {
@@ -995,7 +995,7 @@ const SHOP_ITEMS = {
     price: 1300,
     statBoost: { piercing: 1 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 50,
     tier: 4
   },
   // TIER 5 (Late Game - Ultimate)
@@ -1008,7 +1008,7 @@ const SHOP_ITEMS = {
     price: 2000,
     statBoost: { scoreMultiplier: 1.25 },
     stackable: true,
-    maxStacks: 20,
+    maxStacks: 50,
     tier: 5
   },
   'upgrade_armor_pierce': {
@@ -1020,7 +1020,7 @@ const SHOP_ITEMS = {
     price: 2500,
     statBoost: { armorPen: 0.2 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 50,
     tier: 5
   },
   'upgrade_lifesteal': {
@@ -1032,7 +1032,7 @@ const SHOP_ITEMS = {
     price: 3000,
     statBoost: { lifesteal: 0.05 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 50,
     tier: 5
   },
   // TIER 6 (End Game - Legendary)
@@ -1045,7 +1045,7 @@ const SHOP_ITEMS = {
     price: 8000,
     statBoost: { lifesteal: 0.1 },
     stackable: true,
-    maxStacks: 10,
+    maxStacks: 50,
     tier: 6
   },
 

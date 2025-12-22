@@ -2,9 +2,10 @@
 // Shop items data imported from separate file for better organization
 
 class ShopManager {
-  constructor(inventoryManager, scoreManager) {
+  constructor(inventoryManager, scoreManager, achievementManager = null) {
     this.inventoryManager = inventoryManager;
     this.scoreManager = scoreManager;
+    this.achievementManager = achievementManager;
     this.shopItems = this.initializeShopItems();
   }
 
@@ -99,6 +100,14 @@ class ShopManager {
 
     // Deduct currency
     this.scoreManager.addCurrency(-item.price);
+
+    // Track purchase for achievements
+    if (this.achievementManager) {
+      this.achievementManager.trackPurchase(item.price);
+      if (item.type === 'companion') {
+        this.achievementManager.trackCompanionUnlock();
+      }
+    }
 
     // Handle companion purchases - unlock and spawn immediately if game is running
     if (item.type === 'companion') {
@@ -284,6 +293,19 @@ class ShopManager {
       if (effect.stats.lifesteal) boosts.lifesteal += effect.stats.lifesteal;
       if (effect.stats.shield) boosts.shield = true;
     });
+
+    // Apply permanent boosts from unlocked achievements
+    if (this.achievementManager) {
+      const achievementBoosts = this.achievementManager.getAchievementStatBoosts();
+      if (achievementBoosts.damage) boosts.damage += achievementBoosts.damage;
+      if (achievementBoosts.maxHealth) boosts.maxHealth += achievementBoosts.maxHealth;
+      if (achievementBoosts.regenRate) boosts.regenRate += achievementBoosts.regenRate;
+      if (achievementBoosts.fireRate) boosts.fireRate -= achievementBoosts.fireRate; // Negative because fireRate is a cooldown
+      if (achievementBoosts.critChance) boosts.critChance += achievementBoosts.critChance;
+      if (achievementBoosts.critMultiplier) boosts.critMultiplier += achievementBoosts.critMultiplier;
+      if (achievementBoosts.scoreMultiplier) boosts.scoreMultiplier *= (1 + achievementBoosts.scoreMultiplier);
+      if (achievementBoosts.coinMultiplier) boosts.coinMultiplier *= (1 + achievementBoosts.coinMultiplier);
+    }
 
     return boosts;
   }
