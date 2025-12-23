@@ -14,6 +14,7 @@ class PowerupManager {
     this.noDropKillCount = 0;
     this.notices = [];
     this.collectedCount = 0;
+    this.currentWave = 1; // Track current wave for scaling
   }
 
   spawn(x, y) {
@@ -115,7 +116,10 @@ class PowerupManager {
           const boosts = shopManager.getEquippedStatBoosts();
           maxHealth += boosts.maxHealth;
         }
-        player.health = Math.min(maxHealth, player.health + CONFIG.POWERUPS.HEAL_AMOUNT);
+        // Percentage-based healing (25% of max health, minimum 20 HP)
+        const healPercent = 0.25;
+        const healAmount = Math.max(20, Math.ceil(maxHealth * healPercent));
+        player.health = Math.min(maxHealth, player.health + healAmount);
         // Spawn green plus sign particles
         if (this.particleManager) {
           this.particleManager.spawnHealPlus(player.x, player.y);
@@ -126,7 +130,7 @@ class PowerupManager {
         }
         break;
       case 'speed':
-        this.timers.speed = Date.now() + CONFIG.POWERUPS.DURATION;
+        this.timers.speed = Date.now() + this.getScaledDuration();
         player.speed = CONFIG.PLAYER.SPEED_BOOSTED;
         // Play speed sound
         if (this.audioManager) {
@@ -134,14 +138,14 @@ class PowerupManager {
         }
         break;
       case 'multishot':
-        this.timers.multishot = Date.now() + CONFIG.POWERUPS.DURATION;
+        this.timers.multishot = Date.now() + this.getScaledDuration();
         // Play multishot sound
         if (this.audioManager) {
           this.audioManager.playSound('powerup_multishot', 0.5);
         }
         break;
       case 'shield':
-        this.timers.shield = Date.now() + CONFIG.POWERUPS.DURATION;
+        this.timers.shield = Date.now() + this.getScaledDuration();
         // Play shield sound
         if (this.audioManager) {
           this.audioManager.playSound('powerup_shield', 0.5);
@@ -167,6 +171,13 @@ class PowerupManager {
       case 'shield': return 'cyan';
       default: return 'gray';
     }
+  }
+
+  // Calculate scaled duration based on current wave
+  getScaledDuration() {
+    const baseDuration = CONFIG.POWERUPS.DURATION;
+    const waveBonusDuration = Math.min(5000, this.currentWave * 50); // +50ms per wave, max +5s
+    return baseDuration + waveBonusDuration;
   }
 
   getPowerupIcon(type) {
@@ -345,8 +356,16 @@ class PowerupManager {
 
   checkDropChance(killCount) {
     this.noDropKillCount++;
-    if (Math.random() < CONFIG.POWERUPS.DROP_CHANCE ||
-        this.noDropKillCount >= CONFIG.POWERUPS.GUARANTEED_DROP_KILLS) {
+
+    // Adaptive drop rate based on wave (decreases as waves increase)
+    const baseDropRate = CONFIG.POWERUPS.DROP_CHANCE;
+    const waveReduction = Math.min(0.15, this.currentWave * 0.001); // -0.1% per wave, max -15%
+    const adjustedDropRate = Math.max(0.10, baseDropRate - waveReduction);
+
+    // Adaptive guaranteed drop threshold (increases with wave)
+    const guaranteedThreshold = CONFIG.POWERUPS.GUARANTEED_DROP_KILLS + Math.floor(this.currentWave / 10);
+
+    if (Math.random() < adjustedDropRate || this.noDropKillCount >= guaranteedThreshold) {
       this.noDropKillCount = 0;
       return true;
     }

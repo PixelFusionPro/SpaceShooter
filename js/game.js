@@ -97,6 +97,7 @@ class SpaceShooterGame {
     this.lastRank = 'Soldier';
     this.startingCurrency = this.scoreManager.currency; // Store starting currency for coins earned calculation
     this.ammoDepletedNotified = false; // Track ammo depletion notifications
+    this.lastTrackedPowerupCount = 0; // Track powerup collection for achievements
 
     // Performance monitoring
     this.fps = 60;
@@ -222,12 +223,10 @@ class SpaceShooterGame {
       }
     }
     
-    // Use equipped multishot or powerup multishot
-    let bulletCount = 1;
+    // Stack equipped multishot with powerup multishot
+    let bulletCount = 1 + Math.floor(boosts.multishot || 0);
     if (this.powerupManager.isMultishotActive()) {
-      bulletCount = CONFIG.PLAYER.MULTISHOT_COUNT;
-    } else if (boosts.multishot > 0) {
-      bulletCount = boosts.multishot;
+      bulletCount += (CONFIG.PLAYER.MULTISHOT_COUNT - 1); // Add +2 more bullets
     }
 
     // Check if we have enough ammo before firing
@@ -1020,6 +1019,8 @@ class SpaceShooterGame {
       const enemies = this.waveManager.spawnWave();
       if (enemies && enemies.length > 0) {
         this.enemyManager.addEnemies(enemies);
+        // Update powerup manager with current wave for scaling
+        this.powerupManager.currentWave = this.waveManager.getWave();
       }
     }
 
@@ -1057,8 +1058,14 @@ class SpaceShooterGame {
     // Update screen effects
     this.screenEffects.update();
 
-    // Sync powerup collection count to achievement manager
-    this.achievementManager.trackPowerup(this.powerupManager.collectedCount);
+    // Track powerup collection for achievements (only when count increases)
+    if (this.powerupManager.collectedCount > this.lastTrackedPowerupCount) {
+      const newCollections = this.powerupManager.collectedCount - this.lastTrackedPowerupCount;
+      for (let i = 0; i < newCollections; i++) {
+        this.achievementManager.trackPowerup();
+      }
+      this.lastTrackedPowerupCount = this.powerupManager.collectedCount;
+    }
 
     // Update HUD
     this.updateHUD();
