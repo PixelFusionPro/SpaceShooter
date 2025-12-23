@@ -9,22 +9,51 @@ class PowerupManager {
     this.timers = {
       multishot: 0,
       speed: 0,
-      shield: 0
+      shield: 0,
+      // Tier 2 powerups
+      damage: 0,
+      firerate: 0,
+      regen: 0,
+      // Tier 3 powerups
+      invincibility: 0,
+      timeslow: 0,
+      explosive: 0,
+      homing: 0
     };
     this.noDropKillCount = 0;
     this.notices = [];
     this.collectedCount = 0;
     this.currentWave = 1; // Track current wave for scaling
+    this.regenTickTime = 0; // For regeneration powerup
   }
 
-  spawn(x, y) {
-    const types = ['heal', 'speed', 'multishot', 'shield'];
+  spawn(x, y, rarity = null) {
+    // Tier-based powerup pools based on wave progression
+    let types = [];
+
+    // Tier 1 powerups (always available)
+    const tier1 = ['heal', 'speed', 'multishot', 'shield'];
+    types = [...tier1];
+
+    // Tier 2 powerups (unlock at wave 26)
+    if (this.currentWave >= 26) {
+      const tier2 = ['damage', 'firerate', 'regen'];
+      types = [...types, ...tier2];
+    }
+
+    // Tier 3 powerups (unlock at wave 51)
+    if (this.currentWave >= 51) {
+      const tier3 = ['invincibility', 'timeslow', 'explosive', 'homing'];
+      types = [...types, ...tier3];
+    }
+
     const type = types[Math.floor(Math.random() * types.length)];
     this.powerups.push({
       x,
       y,
       size: CONFIG.POWERUPS.SIZE,
       type,
+      rarity: rarity || 'common',
       spawnTime: performance.now()
     });
   }
@@ -79,6 +108,39 @@ class PowerupManager {
       n.life--;
       if (n.life <= 0) {
         this.notices.splice(i, 1);
+      }
+    }
+
+    // Regeneration powerup tick (heal over time)
+    if (this.isRegenActive()) {
+      const now = Date.now();
+      if (now - this.regenTickTime >= 500) { // Tick every 0.5 seconds
+        let maxHealth = CONFIG.PLAYER.MAX_HEALTH;
+        if (shopManager) {
+          const boosts = shopManager.getEquippedStatBoosts();
+          maxHealth += boosts.maxHealth;
+        }
+        const healAmount = Math.ceil(maxHealth * 0.02); // 2% of max health per tick
+        player.health = Math.min(maxHealth, player.health + healAmount);
+        this.regenTickTime = now;
+
+        // Spawn small heal particles
+        if (this.particleManager) {
+          for (let i = 0; i < 3; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = player.size + Math.random() * 5;
+            this.particleManager.healParticles.add({
+              x: player.x + Math.cos(angle) * dist,
+              y: player.y + Math.sin(angle) * dist,
+              dx: (Math.random() - 0.5) * 0.5,
+              dy: -0.5 - Math.random() * 0.5,
+              life: 20,
+              maxLife: 20,
+              size: Math.random() * 2 + 1,
+              color: '#44ff88'
+            });
+          }
+        }
       }
     }
   }
@@ -151,6 +213,53 @@ class PowerupManager {
           this.audioManager.playSound('powerup_shield', 0.5);
         }
         break;
+
+      // Tier 2 Powerups
+      case 'damage':
+        this.timers.damage = Date.now() + this.getScaledDuration() * 0.8; // 80% duration
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_damage', 0.5);
+        }
+        break;
+      case 'firerate':
+        this.timers.firerate = Date.now() + this.getScaledDuration() * 0.6; // 60% duration
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_firerate', 0.5);
+        }
+        break;
+      case 'regen':
+        this.timers.regen = Date.now() + this.getScaledDuration() * 2; // 200% duration
+        this.regenTickTime = Date.now();
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_regen', 0.5);
+        }
+        break;
+
+      // Tier 3 Powerups
+      case 'invincibility':
+        this.timers.invincibility = Date.now() + 3000; // Fixed 3 seconds
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_invincibility', 0.7);
+        }
+        break;
+      case 'timeslow':
+        this.timers.timeslow = Date.now() + this.getScaledDuration();
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_timeslow', 0.6);
+        }
+        break;
+      case 'explosive':
+        this.timers.explosive = Date.now() + this.getScaledDuration() * 0.5; // 50% duration
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_explosive', 0.5);
+        }
+        break;
+      case 'homing':
+        this.timers.homing = Date.now() + this.getScaledDuration() * 0.7; // 70% duration
+        if (this.audioManager) {
+          this.audioManager.playSound('powerup_homing', 0.5);
+        }
+        break;
     }
 
     // Add notice
@@ -165,10 +274,20 @@ class PowerupManager {
 
   getPowerupColor(type) {
     switch (type) {
+      // Tier 1
       case 'heal': return 'lime';
       case 'speed': return 'orange';
       case 'multishot': return 'gold';
       case 'shield': return 'cyan';
+      // Tier 2
+      case 'damage': return '#ff4444';
+      case 'firerate': return '#ff8800';
+      case 'regen': return '#44ff88';
+      // Tier 3
+      case 'invincibility': return '#ffff00';
+      case 'timeslow': return '#8844ff';
+      case 'explosive': return '#ff6600';
+      case 'homing': return '#00ffff';
       default: return 'gray';
     }
   }
@@ -182,10 +301,20 @@ class PowerupManager {
 
   getPowerupIcon(type) {
     switch (type) {
+      // Tier 1
       case 'heal': return '+';
       case 'speed': return '➤';
       case 'multishot': return '⋮';
       case 'shield': return '⛨';
+      // Tier 2
+      case 'damage': return '⚔';
+      case 'firerate': return '⚡';
+      case 'regen': return '♥';
+      // Tier 3
+      case 'invincibility': return '★';
+      case 'timeslow': return '⏱';
+      case 'explosive': return '💥';
+      case 'homing': return '🎯';
       default: return '?';
     }
   }
@@ -384,6 +513,36 @@ class PowerupManager {
     return this.timers.multishot > Date.now();
   }
 
+  // Tier 2 active checkers
+  isDamageActive() {
+    return this.timers.damage > Date.now();
+  }
+
+  isFireRateActive() {
+    return this.timers.firerate > Date.now();
+  }
+
+  isRegenActive() {
+    return this.timers.regen > Date.now();
+  }
+
+  // Tier 3 active checkers
+  isInvincibilityActive() {
+    return this.timers.invincibility > Date.now();
+  }
+
+  isTimeSlowActive() {
+    return this.timers.timeslow > Date.now();
+  }
+
+  isExplosiveActive() {
+    return this.timers.explosive > Date.now();
+  }
+
+  isHomingActive() {
+    return this.timers.homing > Date.now();
+  }
+
   updatePlayerSpeed(player, shopManager = null) {
     // Base speed (from powerup or normal)
     let baseSpeed = this.isSpeedActive() ?
@@ -400,6 +559,14 @@ class PowerupManager {
   }
 
   getCurrentPowerup() {
+    // Return highest priority active powerup (Tier 3 > Tier 2 > Tier 1)
+    if (this.isInvincibilityActive()) return 'INVINCIBILITY';
+    if (this.isTimeSlowActive()) return 'TIMESLOW';
+    if (this.isExplosiveActive()) return 'EXPLOSIVE';
+    if (this.isHomingActive()) return 'HOMING';
+    if (this.isDamageActive()) return 'DAMAGE';
+    if (this.isFireRateActive()) return 'FIRERATE';
+    if (this.isRegenActive()) return 'REGEN';
     if (this.isShieldActive()) return 'SHIELD';
     if (this.isSpeedActive()) return 'SPEED';
     if (this.isMultishotActive()) return 'MULTISHOT';
@@ -422,8 +589,20 @@ class PowerupManager {
 
   reset() {
     this.powerups = [];
-    this.timers = { multishot: 0, speed: 0, shield: 0 };
+    this.timers = {
+      multishot: 0,
+      speed: 0,
+      shield: 0,
+      damage: 0,
+      firerate: 0,
+      regen: 0,
+      invincibility: 0,
+      timeslow: 0,
+      explosive: 0,
+      homing: 0
+    };
     this.noDropKillCount = 0;
     this.notices = [];
+    this.regenTickTime = 0;
   }
 }
