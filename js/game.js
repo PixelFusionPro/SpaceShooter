@@ -498,11 +498,13 @@ class SpaceShooterGame {
       if (killedEnemy.type === 'boss') {
         this.particleManager.spawnBossExplosionRing(killedEnemy.x, killedEnemy.y);
         this.screenShake(12, 5);
-      }
-
-      // Powerup drop
-      if (this.powerupManager.checkDropChance(this.enemyManager.getKillCount())) {
+        // Boss guaranteed powerup drop (always spawn, skip normal drop check)
         this.powerupManager.spawn(killedEnemy.x, killedEnemy.y);
+      } else {
+        // Normal powerup drop (chance-based)
+        if (this.powerupManager.checkDropChance(this.enemyManager.getKillCount())) {
+          this.powerupManager.spawn(killedEnemy.x, killedEnemy.y);
+        }
       }
 
       // Check for rank change

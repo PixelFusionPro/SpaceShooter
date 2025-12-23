@@ -434,6 +434,33 @@ class AchievementManager {
         requirement: { type: 'powerupsCollected', value: 50 },
         reward: { coins: 250, statBoost: null }
       },
+      'powerup_addict': {
+        id: 'powerup_addict',
+        title: 'Powerup Addict',
+        description: 'Collect 100 powerups',
+        category: 'progression',
+        tier: 'gold',
+        requirement: { type: 'powerupsCollected', value: 100 },
+        reward: { coins: 500, statBoost: { maxHealth: 10 } }
+      },
+      'powerup_legend': {
+        id: 'powerup_legend',
+        title: 'Powerup Legend',
+        description: 'Collect 250 powerups',
+        category: 'progression',
+        tier: 'platinum',
+        requirement: { type: 'powerupsCollected', value: 250 },
+        reward: { coins: 1000, statBoost: { maxHealth: 15, speed: 0.2 } }
+      },
+      'powerup_master': {
+        id: 'powerup_master',
+        title: 'Powerup Master',
+        description: 'Collect 500 powerups',
+        category: 'progression',
+        tier: 'diamond',
+        requirement: { type: 'powerupsCollected', value: 500 },
+        reward: { coins: 2000, statBoost: { maxHealth: 20, speed: 0.3, damage: 1 } }
+      },
 
       // === ECONOMY ACHIEVEMENTS (8) ===
       'shopper': {
