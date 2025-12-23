@@ -192,7 +192,7 @@ class PowerupManager {
         }
         break;
       case 'speed':
-        this.timers.speed = Date.now() + this.getScaledDuration();
+        this.timers.speed = this.stackDuration('speed', this.getScaledDuration());
         player.speed = CONFIG.PLAYER.SPEED_BOOSTED;
         // Play speed sound
         if (this.audioManager) {
@@ -200,14 +200,14 @@ class PowerupManager {
         }
         break;
       case 'multishot':
-        this.timers.multishot = Date.now() + this.getScaledDuration();
+        this.timers.multishot = this.stackDuration('multishot', this.getScaledDuration());
         // Play multishot sound
         if (this.audioManager) {
           this.audioManager.playSound('powerup_multishot', 0.5);
         }
         break;
       case 'shield':
-        this.timers.shield = Date.now() + this.getScaledDuration();
+        this.timers.shield = this.stackDuration('shield', this.getScaledDuration());
         // Play shield sound
         if (this.audioManager) {
           this.audioManager.playSound('powerup_shield', 0.5);
@@ -216,19 +216,19 @@ class PowerupManager {
 
       // Tier 2 Powerups
       case 'damage':
-        this.timers.damage = Date.now() + this.getScaledDuration() * 0.8; // 80% duration
+        this.timers.damage = this.stackDuration('damage', this.getScaledDuration() * 0.8); // 80% duration
         if (this.audioManager) {
           this.audioManager.playSound('powerup_damage', 0.5);
         }
         break;
       case 'firerate':
-        this.timers.firerate = Date.now() + this.getScaledDuration() * 0.6; // 60% duration
+        this.timers.firerate = this.stackDuration('firerate', this.getScaledDuration() * 0.6); // 60% duration
         if (this.audioManager) {
           this.audioManager.playSound('powerup_firerate', 0.5);
         }
         break;
       case 'regen':
-        this.timers.regen = Date.now() + this.getScaledDuration() * 2; // 200% duration
+        this.timers.regen = this.stackDuration('regen', this.getScaledDuration() * 2); // 200% duration
         this.regenTickTime = Date.now();
         if (this.audioManager) {
           this.audioManager.playSound('powerup_regen', 0.5);
@@ -237,25 +237,25 @@ class PowerupManager {
 
       // Tier 3 Powerups
       case 'invincibility':
-        this.timers.invincibility = Date.now() + 3000; // Fixed 3 seconds
+        this.timers.invincibility = this.stackDuration('invincibility', 3000); // Fixed 3 seconds
         if (this.audioManager) {
           this.audioManager.playSound('powerup_invincibility', 0.7);
         }
         break;
       case 'timeslow':
-        this.timers.timeslow = Date.now() + this.getScaledDuration();
+        this.timers.timeslow = this.stackDuration('timeslow', this.getScaledDuration());
         if (this.audioManager) {
           this.audioManager.playSound('powerup_timeslow', 0.6);
         }
         break;
       case 'explosive':
-        this.timers.explosive = Date.now() + this.getScaledDuration() * 0.5; // 50% duration
+        this.timers.explosive = this.stackDuration('explosive', this.getScaledDuration() * 0.5); // 50% duration
         if (this.audioManager) {
           this.audioManager.playSound('powerup_explosive', 0.5);
         }
         break;
       case 'homing':
-        this.timers.homing = Date.now() + this.getScaledDuration() * 0.7; // 70% duration
+        this.timers.homing = this.stackDuration('homing', this.getScaledDuration() * 0.7); // 70% duration
         if (this.audioManager) {
           this.audioManager.playSound('powerup_homing', 0.5);
         }
@@ -297,6 +297,25 @@ class PowerupManager {
     const baseDuration = CONFIG.POWERUPS.DURATION;
     const waveBonusDuration = Math.min(5000, this.currentWave * 50); // +50ms per wave, max +5s
     return baseDuration + waveBonusDuration;
+  }
+
+  // Stack duration when collecting duplicate powerups (max 2x duration)
+  stackDuration(powerupType, baseDuration) {
+    const now = Date.now();
+    const currentTimer = this.timers[powerupType];
+
+    if (currentTimer > now) {
+      // Powerup already active - extend duration
+      const currentRemaining = currentTimer - now;
+      const newTotal = currentRemaining + baseDuration;
+
+      // Cap at 2x base duration
+      const maxDuration = baseDuration * 2;
+      return now + Math.min(newTotal, maxDuration);
+    } else {
+      // Powerup not active - set new timer
+      return now + baseDuration;
+    }
   }
 
   getPowerupIcon(type) {

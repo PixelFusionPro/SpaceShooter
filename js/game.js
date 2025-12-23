@@ -188,12 +188,17 @@ class SpaceShooterGame {
 
   autoShoot() {
     const now = Date.now();
-    
+
     // Get equipped stat boosts
     const boosts = this.shopManager.getEquippedStatBoosts();
     const baseFireRate = CONFIG.PLAYER.FIRE_RATE;
-    const fireRate = baseFireRate * boosts.fireRate;
-    
+    let fireRate = baseFireRate * boosts.fireRate;
+
+    // Apply fire rate powerup (2x fire rate = 50% faster)
+    if (this.powerupManager.isFireRateActive()) {
+      fireRate = fireRate * 0.5; // Half the time between shots = 2x fire rate
+    }
+
     if (now - this.lastShotTime < fireRate) return;
 
     const target = this.enemyManager.findNearest(this.player.x, this.player.y);
@@ -202,19 +207,19 @@ class SpaceShooterGame {
     const dx = target.x - this.player.x;
     const dy = target.y - this.player.y;
     const angle = Math.atan2(dy, dx);
-    
+
     // Get equipped ammo
     const equipped = this.inventoryManager.getEquippedItems();
     let ammoType = null;
     let ammoConsumed = false;
-    
+
     if (equipped.ammo && this.inventoryManager.hasItem(equipped.ammo)) {
       const ammoItem = this.shopManager.getItem(equipped.ammo);
       if (ammoItem && ammoItem.type === 'ammunition') {
         // Check weapon compatibility (get equipped weapon model)
         const equippedWeapon = equipped.weapon ? this.shopManager.getItem(equipped.weapon) : null;
         const weaponModel = equippedWeapon ? equippedWeapon.weaponModel : 'assault_rifle';
-        
+
         // Check if ammo is compatible with weapon (or if no weapon, allow all ammo)
         if (!equippedWeapon || !ammoItem.compatibleWeapons || ammoItem.compatibleWeapons.includes(weaponModel)) {
           ammoType = ammoItem;
@@ -263,6 +268,17 @@ class SpaceShooterGame {
       const spreadAngle = bulletCount > 1 ? angle + (i - 1) * 0.15 : angle;
       bullet.init(this.player.x, this.player.y, spreadAngle, ammoType, bulletBoosts);
       bullet.isPlayerBullet = true; // Mark as player bullet
+
+      // Apply damage boost powerup (+50% damage)
+      if (this.powerupManager.isDamageActive()) {
+        bullet.damage = Math.ceil(bullet.damage * 1.5);
+      }
+
+      // Mark bullet as explosive if powerup is active
+      bullet.explosivePowerup = this.powerupManager.isExplosiveActive();
+
+      // Mark bullet as homing if powerup is active
+      bullet.homingPowerup = this.powerupManager.isHomingActive();
 
       // Consume ammo AFTER successful bullet creation
       if (ammoType && equipped.ammo) {
@@ -892,11 +908,12 @@ class SpaceShooterGame {
     const damage = this.enemyManager.update(
       this.player.x,
       this.player.y,
-      this.powerupManager.isShieldActive()
+      this.powerupManager.isShieldActive(),
+      this.powerupManager.isTimeSlowActive()
     );
 
-    // Apply damage only if not dying AND spawn animation is complete
-    if (damage > 0 && !isDying && this.player.spawnProgress >= 1) {
+    // Apply damage only if not dying AND spawn animation is complete AND not invincible
+    if (damage > 0 && !isDying && this.player.spawnProgress >= 1 && !this.powerupManager.isInvincibilityActive()) {
       this.player.health -= damage;
       this.player.takeHit();
       this.flashDamage();
@@ -931,6 +948,32 @@ class SpaceShooterGame {
 
     // Update bullets
     for (const bullet of this.bulletPool.getInUse()) {
+      // Homing powerup: Steer bullets towards nearest enemy
+      if (bullet.homingPowerup) {
+        const nearestEnemy = this.enemyManager.findNearest(bullet.x, bullet.y);
+        if (nearestEnemy && !nearestEnemy.dying) {
+          // Calculate direction to enemy
+          const dx = nearestEnemy.x - bullet.x;
+          const dy = nearestEnemy.y - bullet.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist > 0) {
+            // Gradually steer towards enemy (30% tracking strength)
+            const trackingStrength = 0.3;
+            const targetDx = (dx / dist) * CONFIG.BULLET.SPEED;
+            const targetDy = (dy / dist) * CONFIG.BULLET.SPEED;
+
+            bullet.dx += (targetDx - bullet.dx) * trackingStrength;
+            bullet.dy += (targetDy - bullet.dy) * trackingStrength;
+
+            // Normalize speed to maintain consistent bullet speed
+            const currentSpeed = Math.hypot(bullet.dx, bullet.dy);
+            bullet.dx = (bullet.dx / currentSpeed) * CONFIG.BULLET.SPEED;
+            bullet.dy = (bullet.dy / currentSpeed) * CONFIG.BULLET.SPEED;
+          }
+        }
+      }
+
       bullet.update(this.canvas.width, this.canvas.height);
     }
 

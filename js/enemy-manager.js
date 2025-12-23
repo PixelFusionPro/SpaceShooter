@@ -93,7 +93,7 @@ class EnemyManager {
   }
 
   // Update all enemies
-  update(playerX, playerY, shieldActive) {
+  update(playerX, playerY, shieldActive, timeSlowActive = false) {
     let totalDamage = 0;
 
     for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -108,8 +108,19 @@ class EnemyManager {
         continue; // Skip normal update for dying enemies
       }
 
+      // Apply time slow powerup (50% speed reduction)
+      const originalSpeed = enemy.speed;
+      if (timeSlowActive) {
+        enemy.speed = enemy.speed * 0.5;
+      }
+
       // Normal enemy update (pass all enemies for separation)
       const damage = enemy.update(playerX, playerY, shieldActive, this.enemies);
+
+      // Restore original speed after update
+      if (timeSlowActive) {
+        enemy.speed = originalSpeed;
+      }
       if (damage > 0) {
         totalDamage += damage;
       }
@@ -181,9 +192,29 @@ class EnemyManager {
           // Mark enemy as pierced
           bullet.markPierced(enemy);
 
+          // Explosive powerup: AoE damage to nearby enemies
+          if (bullet.explosivePowerup) {
+            const aoeRadius = 80; // AoE radius in pixels
+            const aoeDamage = Math.ceil(bullet.damage * 0.5); // 50% of bullet damage
+
+            for (let k = 0; k < this.enemies.length; k++) {
+              const nearbyEnemy = this.enemies[k];
+              if (nearbyEnemy === enemy || nearbyEnemy.dying) continue;
+
+              const dist = Math.hypot(nearbyEnemy.x - enemy.x, nearbyEnemy.y - enemy.y);
+              if (dist <= aoeRadius) {
+                nearbyEnemy.health -= aoeDamage;
+                // Call hit callback for AoE damage
+                if (onHit) {
+                  onHit(nearbyEnemy, k, aoeDamage, bullet);
+                }
+              }
+            }
+          }
+
           // Call hit callback with damage amount
           if (onHit) {
-            onHit(enemy, j, damageDealt);
+            onHit(enemy, j, damageDealt, bullet);
           }
           
           // Check if bullet can continue piercing
