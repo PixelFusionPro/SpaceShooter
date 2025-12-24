@@ -6,11 +6,11 @@ class ParticleManager {
     this.dustParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     this.trailParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     this.sparkleParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    this.bloodParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
+    this.debrisParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     this.speedEnergyParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     this.multishotParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     this.healParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
-    // Zombie-specific particle pools
+    // Enemy-specific particle pools
     this.eliteAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     this.bossAuraParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
     this.explosiveGlowParticles = new ParticlePool(CONFIG.POOL.PARTICLES_SIZE);
