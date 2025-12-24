@@ -137,6 +137,10 @@
           <span class="pause-stat-value" id="pauseWave">0</span>
         </div>
         <div class="pause-stat">
+          <span class="pause-stat-label">Rank:</span>
+          <span class="pause-stat-value" id="pauseRank">Soldier</span>
+        </div>
+        <div class="pause-stat">
           <span class="pause-stat-label">Score:</span>
           <span class="pause-stat-value" id="pauseScore">0</span>
         </div>
@@ -158,6 +162,18 @@
 
   <!-- Damage Flash -->
   <div id="damageFlash"></div>
+
+  <!-- Rank Up Flash Effect -->
+  <div id="rankUpFlash" class="rank-up-flash"></div>
+
+  <!-- Rank Up Notification -->
+  <div id="rankUpNotification" class="rank-up-notification" style="display:none;">
+    <div class="rank-up-icon" id="rankUpIcon">⭐</div>
+    <div class="rank-up-text">
+      <div class="rank-up-label">RANK UP!</div>
+      <div class="rank-up-rank-name" id="rankUpRank">Veteran</div>
+    </div>
+  </div>
 
   <!-- Achievement Notification -->
   <div id="achievementNotification" style="display:none;"></div>

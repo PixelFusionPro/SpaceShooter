@@ -1282,6 +1282,10 @@ function pauseToMainMenu() {
   if (pauseButton) {
     pauseButton.classList.remove('show');
   }
+  // Clean up event listeners before destroying game instance
+  if (Game && Game.controls && Game.controls.destroy) {
+    Game.controls.destroy();
+  }
   Game = null; // Clean up game instance
 }
 
@@ -1293,6 +1297,10 @@ function returnToMainMenu() {
   const pauseButton = document.querySelector('.pause-button');
   if (pauseButton) {
     pauseButton.classList.remove('show');
+  }
+  // Clean up event listeners before destroying game instance
+  if (Game && Game.controls && Game.controls.destroy) {
+    Game.controls.destroy();
   }
   Game = null; // Clean up game instance
   if (typeof updateMenuCoins === 'function') {
