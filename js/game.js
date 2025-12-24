@@ -1104,17 +1104,17 @@ class ZombieGame {
     // Draw all particle systems (background layer)
     this.particleManager.draw(this.ctx);
 
-    // Draw fortress structures (behind zombies)
+    // Draw fortress structures (behind enemies)
     this.fortressManager.draw(this.ctx);
 
-    // Draw zombies
-    this.zombieManager.draw(this.ctx);
+    // Draw enemies
+    this.enemyManager.draw(this.ctx);
 
     // Draw companions
     this.companionManager.draw(this.ctx);
 
     // Draw player
-    const target = this.zombieManager.findNearest(this.player.x, this.player.y);
+    const target = this.enemyManager.findNearest(this.player.x, this.player.y);
     const scoreData = this.scoreManager.getData();
 
     // Get equipped weapon model
@@ -1204,14 +1204,14 @@ class ZombieGame {
     // Get final stats
     const scoreData = this.scoreManager.getData();
     const finalWave = this.waveManager.getWave();
-    const zombiesKilled = this.zombieManager.getKillCount();
+    const enemiesKilled = this.enemyManager.getKillCount();
     const coinsEarned = scoreData.currency - this.startingCurrency;
 
     // Update persistent rank
-    this.scoreManager.updatePersistentRank(finalWave, zombiesKilled);
+    this.scoreManager.updatePersistentRank(finalWave, enemiesKilled);
 
     // Update statistics
-    this.statisticsManager.endGame(scoreData.score, finalWave, zombiesKilled, coinsEarned);
+    this.statisticsManager.endGame(scoreData.score, finalWave, enemiesKilled, coinsEarned);
 
     // Update UI elements
     document.getElementById('finalScore').textContent = scoreData.score.toLocaleString();
@@ -1228,7 +1228,7 @@ class ZombieGame {
       }
     }
     document.getElementById('finalWave').textContent = finalWave;
-    document.getElementById('finalKills').textContent = zombiesKilled;
+    document.getElementById('finalKills').textContent = enemiesKilled;
     document.getElementById('coinsEarned').textContent = `+${Math.max(0, coinsEarned)}`;
     
     // Show game over screen
