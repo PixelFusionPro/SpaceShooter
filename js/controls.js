@@ -81,20 +81,54 @@ class Controls {
   }
 
   updatePlayer(player) {
-    player.vx = 0;
-    player.vy = 0;
-
+    // Spaceship controls: realistic physics
+    // Rotation controls (A/D or Left/Right)
+    let rotationInput = 0;
     if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) {
-      player.vx = -player.speed;
+      rotationInput = -1; // Rotate left
     }
     if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) {
-      player.vx = player.speed;
+      rotationInput = 1; // Rotate right
     }
+    
+    // Apply rotation acceleration
+    if (rotationInput !== 0) {
+      player.angularVelocity += rotationInput * player.rotationSpeed;
+      // Limit angular speed
+      if (Math.abs(player.angularVelocity) > player.maxAngularSpeed) {
+        player.angularVelocity = Math.sign(player.angularVelocity) * player.maxAngularSpeed;
+      }
+    }
+    
+    // Thrust controls (W/Up for forward thrust, S/Down for reverse)
+    let thrustInput = 0;
     if (this.keys['ArrowUp'] || this.keys['w'] || this.keys['W']) {
-      player.vy = -player.speed;
+      thrustInput = 1; // Forward thrust
     }
     if (this.keys['ArrowDown'] || this.keys['s'] || this.keys['S']) {
-      player.vy = player.speed;
+      thrustInput = -0.5; // Reverse thrust (weaker)
+    }
+    
+    // Apply thrust in direction ship is facing (realistic spaceship physics)
+    if (thrustInput !== 0) {
+      player.thrustActive = true;
+      // Thrust in the direction the ship is facing
+      const thrustX = Math.cos(player.angle) * player.acceleration * player.speed * thrustInput;
+      const thrustY = Math.sin(player.angle) * player.acceleration * player.speed * thrustInput;
+      
+      // Update velocity with thrust
+      player.vx += thrustX;
+      player.vy += thrustY;
+      
+      // Limit max speed
+      const currentSpeed = Math.hypot(player.vx, player.vy);
+      const maxSpeed = player.speed * 1.3; // Slight overspeed allowed
+      if (currentSpeed > maxSpeed) {
+        player.vx = (player.vx / currentSpeed) * maxSpeed;
+        player.vy = (player.vy / currentSpeed) * maxSpeed;
+      }
+    } else {
+      player.thrustActive = false;
     }
   }
 

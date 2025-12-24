@@ -1,8 +1,8 @@
-class Zombie {
+class EnemyShip {
   constructor(canvas, type = 'normal') {
     this.canvas = canvas;
     this.type = type;
-    const config = CONFIG.ZOMBIES[type.toUpperCase()] || CONFIG.ZOMBIES.NORMAL;
+    const config = CONFIG.ENEMIES[type.toUpperCase()] || CONFIG.ENEMIES.NORMAL;
     this.size = config.SIZE;
     this.speed = config.SPEED;
     this.baseSpeed = config.SPEED; // Store base speed for fortress collision slowdown
@@ -11,12 +11,12 @@ class Zombie {
     this.lastX = 0;
     this.lastY = 0;
     this.stuckTimer = 0;
-    this.elite = Math.random() < CONFIG.ZOMBIES.ELITE_CHANCE;
-    this.variant = Math.random() < CONFIG.ZOMBIES.VARIANT_CHANCE ? 'hat' : null;
+    this.elite = Math.random() < CONFIG.ENEMIES.ELITE_CHANCE;
+    this.variant = Math.random() < CONFIG.ENEMIES.VARIANT_CHANCE ? 'hat' : null;
 
-    // Damage/missing limbs (calculated once, not every frame)
-    this.hasLeftArm = Math.random() > 0.25;
-    this.hasRightArm = Math.random() > 0.25;
+    // Spaceship rotation - face toward player
+    this.angle = 0; // Current rotation angle
+    this.rotationSpeed = 0.12; // Rotation speed (radians per frame)
 
     // Death animation system
     this.dying = false;
@@ -26,15 +26,12 @@ class Zombie {
     this.deathVelocityX = 0;
     this.deathVelocityY = 0;
 
-    // Walk animation
-    this.walkCycle = Math.random() * Math.PI * 2; // Random start phase
-    this.walkBob = 0;
-    this.headTilt = 0;
-    this.armSwing = 0;
+    // Animation (for engine glow, etc.)
+    this.animationPhase = Math.random() * Math.PI * 2; // Random start phase
 
     // Boss-specific
     if (type === 'boss') {
-      this.minionInterval = CONFIG.ZOMBIES.BOSS.MINION_INTERVAL;
+      this.minionInterval = CONFIG.ENEMIES.BOSS.MINION_INTERVAL;
       this.nextMinionTime = Date.now() + this.minionInterval;
     }
 
@@ -66,47 +63,44 @@ class Zombie {
     const dy = playerY - this.y;
     const dist = Math.hypot(dx, dy);
 
+    // Calculate target angle to face player
+    const targetAngle = Math.atan2(dy, dx);
+    
+    // Smoothly rotate toward target angle
+    let angleDiff = targetAngle - this.angle;
+    // Normalize angle difference to [-PI, PI]
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    
+    // Rotate toward target
+    if (Math.abs(angleDiff) > 0.01) {
+      this.angle += Math.sign(angleDiff) * Math.min(this.rotationSpeed, Math.abs(angleDiff));
+    } else {
+      this.angle = targetAngle;
+    }
+    
+    // Normalize angle to [0, 2*PI]
+    while (this.angle < 0) this.angle += Math.PI * 2;
+    while (this.angle >= Math.PI * 2) this.angle -= Math.PI * 2;
+
+    // Move toward player
     this.x += (dx / dist) * this.speed;
     this.y += (dy / dist) * this.speed;
 
-    // Update walk animation (speed-based)
-    const isMoving = Math.abs(this.x - this.lastX) > 0.1 || Math.abs(this.y - this.lastY) > 0.1;
-    if (isMoving) {
-      // Type-specific walk speeds
-      let walkSpeed = 0.15;
-      if (this.type === 'runner') walkSpeed = 0.3; // Fast shamble
-      if (this.type === 'tank') walkSpeed = 0.08; // Slow lumber
-      if (this.type === 'boss') walkSpeed = 0.05; // Slow menacing
-
-      this.walkCycle += walkSpeed;
-
-      // Body bob (up and down motion)
-      if (this.type === 'tank') {
-        this.walkBob = Math.sin(this.walkCycle) * 3; // Heavy stomp
-      } else if (this.type === 'runner') {
-        this.walkBob = Math.sin(this.walkCycle * 1.5) * 2; // Quick bob
-      } else {
-        this.walkBob = Math.sin(this.walkCycle) * 1.5; // Normal shamble
-      }
-
-      // Head tilt (side to side sway)
-      this.headTilt = Math.sin(this.walkCycle * 0.7) * 0.15;
-
-      // Arm swing
-      this.armSwing = Math.sin(this.walkCycle) * 8;
-    }
+    // Update animation phase for engine effects
+    this.animationPhase += 0.1;
 
     // Check collision with player
     const collisionDist = dist < (this.size + CONFIG.PLAYER.SIZE);
     if (collisionDist && !shieldActive) {
-      return CONFIG.ZOMBIES.DAMAGE_PER_FRAME; // Return damage dealt
+      return CONFIG.ENEMIES.DAMAGE_PER_FRAME; // Return damage dealt
     }
 
     // Anti-stuck system
     const moved = Math.hypot(this.x - this.lastX, this.y - this.lastY);
     if (moved < 0.5) {
       this.stuckTimer++;
-      if (this.stuckTimer > CONFIG.ZOMBIES.STUCK_THRESHOLD) {
+      if (this.stuckTimer > CONFIG.ENEMIES.STUCK_THRESHOLD) {
         this.spawnFromEdge();
         this.stuckTimer = 0;
       }
@@ -124,13 +118,20 @@ class Zombie {
   }
 
   draw(ctx) {
+    // Apply rotation transform for spaceship
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    ctx.translate(-this.x, -this.y);
+
     // Boss rendering
     if (this.type === 'boss') {
       this.drawBoss(ctx);
+      ctx.restore();
       return;
     }
 
-    // Type-specific zombie rendering
+    // Type-specific spaceship rendering
     switch (this.type) {
       case 'tank': this.drawTank(ctx); break;
       case 'runner': this.drawRunner(ctx); break;
@@ -138,65 +139,132 @@ class Zombie {
       case 'healer': this.drawHealer(ctx); break;
       default: this.drawNormal(ctx);
     }
+    
+    ctx.restore();
   }
 
   drawBoss(ctx) {
-    // BOSS - Multi-headed monstrosity
+    // BOSS - Massive capital ship (enhanced)
     const pulse = Math.sin(performance.now() / 200) * 0.1;
+    const engineGlow = Math.sin(this.animationPhase) * 0.3 + 0.7;
+    const weaponPulse = Math.sin(this.animationPhase * 3) * 0.3 + 0.7;
 
-    // Boss aura glow removed - using particles instead
-
-    // Main grotesque body (irregular shape)
-    ctx.fillStyle = '#1a1a1a';
+    // Main hull - large battleship design with gradient
+    const hullGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 1.6);
+    hullGradient.addColorStop(0, '#2a1a2a');
+    hullGradient.addColorStop(0.4, '#1a1a1a');
+    hullGradient.addColorStop(1, '#0a0a0a');
+    ctx.fillStyle = hullGradient;
     ctx.beginPath();
-    ctx.ellipse(this.x, this.y, this.size * 1.2, this.size, 0, 0, Math.PI * 2);
+    ctx.ellipse(this.x, this.y, this.size * 1.6, this.size * 1.3, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#600';
-    ctx.lineWidth = 4;
+    
+    // Hull outline with pulsing effect
+    ctx.strokeStyle = `rgba(255,0,255,${0.8 + pulse})`;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Exposed ribs/spine
-    ctx.strokeStyle = '#ddd';
+    // Central command structure with detail
+    const commandGradient = ctx.createRadialGradient(this.x, this.y - this.size * 0.3, 0, this.x, this.y - this.size * 0.3, this.size * 0.9);
+    commandGradient.addColorStop(0, '#3a2a3a');
+    commandGradient.addColorStop(1, '#1a1a1a');
+    ctx.fillStyle = commandGradient;
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y - this.size * 0.3, this.size * 0.85, this.size * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ff00ff';
     ctx.lineWidth = 2;
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.arc(this.x, this.y - this.size * 0.5 + i * this.size * 0.3, this.size * 0.7, Math.PI, 0);
-      ctx.stroke();
-    }
+    ctx.stroke();
+    
+    // Command center window
+    ctx.fillStyle = '#0ff';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.3, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Three glowing red eyes (mutated)
-    const eyes = [
-      { x: -this.size * 0.3, y: -this.size * 0.3 },
-      { x: this.size * 0.3, y: -this.size * 0.3 },
-      { x: 0, y: -this.size * 0.6 }
+    // Multiple weapon turrets (glowing red, pulsing)
+    const turrets = [
+      { x: -this.size * 0.85, y: -this.size * 0.5 },
+      { x: this.size * 0.85, y: -this.size * 0.5 },
+      { x: -this.size * 0.65, y: this.size * 0.3 },
+      { x: this.size * 0.65, y: this.size * 0.3 }
     ];
-    eyes.forEach(eye => {
-      // Eye glow
-      ctx.fillStyle = 'rgba(255,0,0,0.6)';
+    turrets.forEach(turret => {
+      // Outer glow
+      const turretGradient = ctx.createRadialGradient(
+        this.x + turret.x, this.y + turret.y, 0,
+        this.x + turret.x, this.y + turret.y, 10
+      );
+      turretGradient.addColorStop(0, `rgba(255,0,0,${weaponPulse * 0.8})`);
+      turretGradient.addColorStop(1, 'rgba(255,0,0,0)');
+      ctx.fillStyle = turretGradient;
       ctx.beginPath();
-      ctx.arc(this.x + eye.x, this.y + eye.y, 8, 0, Math.PI * 2);
+      ctx.arc(this.x + turret.x, this.y + turret.y, 10, 0, Math.PI * 2);
       ctx.fill();
-      // Eye core
+      
+      // Turret body
+      ctx.fillStyle = `rgba(255,0,0,${weaponPulse})`;
+      ctx.beginPath();
+      ctx.arc(this.x + turret.x, this.y + turret.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Turret core
       ctx.fillStyle = '#ff0000';
       ctx.beginPath();
-      ctx.arc(this.x + eye.x, this.y + eye.y, 5, 0, Math.PI * 2);
+      ctx.arc(this.x + turret.x, this.y + turret.y, 4, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // Tentacles/extra limbs
+    // Engine pods (4 large engines) with enhanced visuals
     for (let i = 0; i < 4; i++) {
-      const angle = (Math.PI * 2 / 4) * i + performance.now() / 1000;
-      const tentacleLen = this.size * 1.5;
-      ctx.strokeStyle = '#2a2a2a';
-      ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
+      const angle = (Math.PI * 2 / 4) * i;
+      const engineX = this.x + Math.cos(angle) * this.size * 1.15;
+      const engineY = this.y + Math.sin(angle) * this.size * 0.85;
+      
+      // Engine outer glow
+      const engineGradient = ctx.createRadialGradient(engineX, engineY, 0, engineX, engineY, this.size * 0.5);
+      engineGradient.addColorStop(0, `rgba(255,0,255,${engineGlow})`);
+      engineGradient.addColorStop(0.6, `rgba(255,0,255,${engineGlow * 0.5})`);
+      engineGradient.addColorStop(1, 'rgba(255,0,255,0)');
+      ctx.fillStyle = engineGradient;
       ctx.beginPath();
-      ctx.moveTo(this.x, this.y);
-      ctx.quadraticCurveTo(
-        this.x + Math.cos(angle) * tentacleLen * 0.5,
-        this.y + Math.sin(angle) * tentacleLen * 0.5 + Math.sin(performance.now() / 300 + i) * 10,
-        this.x + Math.cos(angle) * tentacleLen,
-        this.y + Math.sin(angle) * tentacleLen
+      ctx.arc(engineX, engineY, this.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Engine core
+      ctx.fillStyle = `rgba(255,0,255,${engineGlow})`;
+      ctx.beginPath();
+      ctx.arc(engineX, engineY, this.size * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Engine bright center
+      ctx.fillStyle = '#ff00ff';
+      ctx.beginPath();
+      ctx.arc(engineX, engineY, this.size * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Engine trail with gradient
+      const trailGradient = ctx.createLinearGradient(
+        engineX, engineY,
+        engineX + Math.cos(angle + Math.PI) * this.size * 1.0,
+        engineY + Math.sin(angle + Math.PI) * this.size * 1.0
+      );
+      trailGradient.addColorStop(0, `rgba(255,0,255,${engineGlow * 0.8})`);
+      trailGradient.addColorStop(0.5, `rgba(255,0,255,${engineGlow * 0.4})`);
+      trailGradient.addColorStop(1, 'rgba(255,0,255,0)');
+      ctx.strokeStyle = trailGradient;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(engineX, engineY);
+      ctx.lineTo(
+        engineX + Math.cos(angle + Math.PI) * this.size * 1.0,
+        engineY + Math.sin(angle + Math.PI) * this.size * 1.0
       );
       ctx.stroke();
     }
@@ -223,208 +291,318 @@ class Zombie {
   }
 
   drawTank(ctx) {
-    // TANK - Hulking muscular body
-    const color = this.elite ? '#0ff' : '#663366';
-    const bodyY = this.y + this.walkBob;
+    // TANK - Heavy armored battleship (enhanced visuals)
+    const baseColor = this.elite ? '#0ff' : '#663366';
+    const darkColor = this.elite ? '#0aa' : '#551155';
+    const engineGlow = Math.sin(this.animationPhase) * 0.3 + 0.7;
 
-    // Elite aura
-    this.drawEliteAura(ctx, bodyY);
-
-    // Massive shoulders
-    ctx.fillStyle = color;
-    ctx.fillRect(this.x - this.size * 1.2, bodyY - this.size * 0.6, this.size * 2.4, this.size * 0.8);
-
-    // Huge torso (wider body)
-    ctx.fillRect(this.x - this.size * 0.9, bodyY - this.size * 0.2, this.size * 1.8, this.size * 1.4);
-
-    // Bulging muscles (abs)
-    ctx.fillStyle = '#551155';
-    for (let i = 0; i < 3; i++) {
-      ctx.fillRect(this.x - this.size * 0.3, bodyY + i * this.size * 0.4, this.size * 0.6, this.size * 0.35);
+    // Elite glow (enhanced)
+    if (this.elite) {
+      const eliteGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 1.8);
+      eliteGradient.addColorStop(0, 'rgba(0,255,255,0.3)');
+      eliteGradient.addColorStop(0.5, 'rgba(0,255,255,0.15)');
+      eliteGradient.addColorStop(1, 'rgba(0,255,255,0)');
+      ctx.fillStyle = eliteGradient;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 1.8, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Small head (hunched) with tilt
-    ctx.fillStyle = '#8a668a';
-    ctx.save();
-    ctx.translate(this.x, bodyY - this.size * 0.8);
-    ctx.rotate(this.headTilt * 0.5); // Slow head sway for tank
+    // Main hull with gradient
+    const hullGradient = ctx.createRadialGradient(this.x, this.y - this.size * 0.3, 0, this.x, this.y, this.size * 1.2);
+    hullGradient.addColorStop(0, baseColor);
+    hullGradient.addColorStop(0.7, darkColor);
+    hullGradient.addColorStop(1, '#331133');
+    ctx.fillStyle = hullGradient;
     ctx.beginPath();
-    ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+    ctx.ellipse(this.x, this.y, this.size * 1.15, this.size * 0.95, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Hull outline with highlight
+    ctx.strokeStyle = darkColor;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.strokeStyle = this.elite ? '#0ff' : '#884488';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Armor plates (segmented with depth)
+    ctx.fillStyle = darkColor;
+    for (let i = 0; i < 3; i++) {
+      const plateY = this.y - this.size * 0.4 + i * this.size * 0.4;
+      ctx.fillRect(this.x - this.size * 0.45, plateY, this.size * 0.9, this.size * 0.3);
+      // Plate highlight
+      ctx.fillStyle = this.elite ? 'rgba(0,255,255,0.3)' : 'rgba(136,68,136,0.3)';
+      ctx.fillRect(this.x - this.size * 0.45, plateY, this.size * 0.9, this.size * 0.1);
+      ctx.fillStyle = darkColor;
+    }
+
+    // Command center (cockpit) with window
+    ctx.fillStyle = darkColor;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.5, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.elite ? '#0ff' : '#aa66aa';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.5, this.size * 0.25, 0, Math.PI * 2);
     ctx.fill();
 
-    // Angry eyes
-    ctx.fillStyle = '#ff0';
-    ctx.fillRect(-4, 0, 3, 3);
-    ctx.fillRect(1, 0, 3, 3);
-    ctx.restore();
+    // Weapon ports (glowing with pulsing)
+    const weaponPulse = Math.sin(this.animationPhase * 2) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255,255,0,${weaponPulse})`;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.6, this.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.3, this.y, 4, 0, Math.PI * 2);
+    ctx.fill();
 
-    // HUGE dragging arms (with animated swing)
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 8;
-    ctx.lineCap = 'round';
-    if (this.hasLeftArm) {
-      ctx.beginPath();
-      ctx.moveTo(this.x - this.size * 1.1, bodyY - this.size * 0.2);
-      ctx.lineTo(this.x - this.size * 1.8 + this.armSwing * 0.5, bodyY + this.size * 1.2);
-      ctx.stroke();
-    }
-    if (this.hasRightArm) {
-      ctx.beginPath();
-      ctx.moveTo(this.x + this.size * 1.1, bodyY - this.size * 0.2);
-      ctx.lineTo(this.x + this.size * 1.8 - this.armSwing * 0.5, bodyY + this.size * 1.2);
-      ctx.stroke();
-    }
+    // Large engine pods (rear) with enhanced glow
+    const engineColor = this.elite ? `rgba(0,255,255,${engineGlow})` : `rgba(102,51,102,${engineGlow})`;
+    ctx.fillStyle = engineColor;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.5, this.y + this.size * 0.7, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.5, this.y + this.size * 0.7, this.size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Engine core (brighter center)
+    ctx.fillStyle = this.elite ? '#0ff' : '#aa66aa';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.5, this.y + this.size * 0.7, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.5, this.y + this.size * 0.7, this.size * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Engine trails with gradient
+    const trailGradient1 = ctx.createLinearGradient(
+      this.x - this.size * 0.5, this.y + this.size * 0.7,
+      this.x - this.size * 0.5, this.y + this.size * 1.3
+    );
+    trailGradient1.addColorStop(0, engineColor);
+    trailGradient1.addColorStop(1, 'rgba(102,51,102,0)');
+    ctx.strokeStyle = trailGradient1;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.5, this.y + this.size * 0.7);
+    ctx.lineTo(this.x - this.size * 0.5, this.y + this.size * 1.3);
+    ctx.stroke();
+    
+    const trailGradient2 = ctx.createLinearGradient(
+      this.x + this.size * 0.5, this.y + this.size * 0.7,
+      this.x + this.size * 0.5, this.y + this.size * 1.3
+    );
+    trailGradient2.addColorStop(0, engineColor);
+    trailGradient2.addColorStop(1, 'rgba(102,51,102,0)');
+    ctx.strokeStyle = trailGradient2;
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.5, this.y + this.size * 0.7);
+    ctx.lineTo(this.x + this.size * 0.5, this.y + this.size * 1.3);
+    ctx.stroke();
 
     this.drawHealthBar(ctx);
   }
 
   drawRunner(ctx) {
-    // RUNNER - Lean sprinting body
-    const color = this.elite ? '#0ff' : '#aaa04a';
-    const bodyY = this.y + this.walkBob;
+    // RUNNER - Fast interceptor fighter (enhanced)
+    const baseColor = this.elite ? '#0ff' : '#aaa04a';
+    const darkColor = this.elite ? '#0aa' : '#888040';
+    const engineGlow = Math.sin(this.animationPhase * 1.5) * 0.4 + 0.8; // Faster pulse
 
-    // Elite aura
-    this.drawEliteAura(ctx, bodyY);
-
-    // Lean forward posture (speed lines - more dynamic)
-    ctx.strokeStyle = 'rgba(170,160,74,0.3)';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 3; i++) {
-      const lineOffset = Math.sin(this.walkCycle + i) * 3; // Animated speed lines
+    // Elite glow
+    if (this.elite) {
+      const eliteGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 1.5);
+      eliteGradient.addColorStop(0, 'rgba(0,255,255,0.25)');
+      eliteGradient.addColorStop(1, 'rgba(0,255,255,0)');
+      ctx.fillStyle = eliteGradient;
       ctx.beginPath();
-      ctx.moveTo(this.x - this.size * 1.5 - i * 5, bodyY + lineOffset);
-      ctx.lineTo(this.x - this.size * 2.5 - i * 5, bodyY + lineOffset);
+      ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Speed lines (trailing effect with fade)
+    for (let i = 0; i < 5; i++) {
+      const alpha = 0.5 - (i * 0.1);
+      ctx.strokeStyle = `rgba(170,160,74,${alpha})`;
+      ctx.lineWidth = 2 - (i * 0.3);
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 1.0 - i * 5, this.y);
+      ctx.lineTo(this.x - this.size * 1.6 - i * 5, this.y);
       ctx.stroke();
     }
 
-    // Skinny body (athletic build) - lean forward
-    const leanAngle = 0.1; // Forward lean
-    ctx.save();
-    ctx.translate(this.x, bodyY);
-    ctx.rotate(leanAngle);
-
-    ctx.fillStyle = color;
-    ctx.fillRect(-this.size * 0.5, -this.size * 0.4, this.size, this.size * 1.4);
-
-    // Torn running shirt
-    ctx.fillStyle = '#888';
-    ctx.fillRect(-this.size * 0.4, -this.size * 0.3, this.size * 0.8, this.size * 0.8);
-    // Rips in shirt
-    ctx.strokeStyle = color;
+    // Sleek streamlined hull with gradient
+    const hullGradient = ctx.createLinearGradient(this.x, this.y - this.size * 0.5, this.x, this.y + this.size * 0.5);
+    hullGradient.addColorStop(0, baseColor);
+    hullGradient.addColorStop(0.5, darkColor);
+    hullGradient.addColorStop(1, '#666030');
+    ctx.fillStyle = hullGradient;
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y, this.size * 0.65, this.size * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Hull outline
+    ctx.strokeStyle = darkColor;
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-this.size * 0.2, 0);
-    ctx.lineTo(this.size * 0.2, this.size * 0.3);
     ctx.stroke();
-    ctx.restore();
 
-    // Head (leaning forward) with wild shaking
-    ctx.fillStyle = '#c0c09a';
-    ctx.save();
-    ctx.translate(this.x + this.size * 0.2, bodyY - this.size * 0.7);
-    ctx.rotate(this.headTilt * 1.5); // Wild head movement
+    // Cockpit with window
+    ctx.fillStyle = darkColor;
     ctx.beginPath();
-    ctx.arc(0, 0, this.size * 0.45, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y - this.size * 0.3, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.elite ? '#0ff' : '#e0d090';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.3, this.size * 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Wild eyes
-    ctx.fillStyle = '#f00';
-    ctx.fillRect(-this.size * 0.15, 0, 2, 3);
-    ctx.fillRect(this.size * 0.05, 0, 2, 3);
-    ctx.restore();
+    // Weapon ports (glowing red with pulse)
+    const weaponPulse = Math.sin(this.animationPhase * 3) * 0.4 + 0.6;
+    ctx.fillStyle = `rgba(255,0,0,${weaponPulse})`;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.3, this.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.1, this.y, 3, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Thin reaching arms (pumping motion)
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    if (this.hasLeftArm) {
-      ctx.beginPath();
-      ctx.moveTo(this.x - this.size * 0.4, bodyY);
-      ctx.lineTo(this.x - this.size * 1.2, bodyY - this.size * 0.2 - this.armSwing);
-      ctx.stroke();
-    }
-    if (this.hasRightArm) {
-      ctx.beginPath();
-      ctx.moveTo(this.x + this.size * 0.4, bodyY);
-      ctx.lineTo(this.x + this.size * 1.4, bodyY + this.armSwing);
-      ctx.stroke();
-    }
+    // Twin engines (rear, bright glow) with core
+    const engineColor = this.elite ? `rgba(0,255,255,${engineGlow})` : `rgba(170,160,74,${engineGlow})`;
+    ctx.fillStyle = engineColor;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.3, this.y + this.size * 0.5, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.3, this.y + this.size * 0.5, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Engine cores
+    ctx.fillStyle = this.elite ? '#0ff' : '#ffaa00';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.3, this.y + this.size * 0.5, this.size * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.3, this.y + this.size * 0.5, this.size * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Long engine trails with gradient
+    const trailGradient1 = ctx.createLinearGradient(
+      this.x - this.size * 0.3, this.y + this.size * 0.5,
+      this.x - this.size * 0.3, this.y + this.size * 1.4
+    );
+    trailGradient1.addColorStop(0, engineColor);
+    trailGradient1.addColorStop(0.5, `rgba(170,160,74,${engineGlow * 0.5})`);
+    trailGradient1.addColorStop(1, 'rgba(170,160,74,0)');
+    ctx.strokeStyle = trailGradient1;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, this.y + this.size * 0.5);
+    ctx.lineTo(this.x - this.size * 0.3, this.y + this.size * 1.4);
+    ctx.stroke();
+    
+    const trailGradient2 = ctx.createLinearGradient(
+      this.x + this.size * 0.3, this.y + this.size * 0.5,
+      this.x + this.size * 0.3, this.y + this.size * 1.4
+    );
+    trailGradient2.addColorStop(0, engineColor);
+    trailGradient2.addColorStop(0.5, `rgba(170,160,74,${engineGlow * 0.5})`);
+    trailGradient2.addColorStop(1, 'rgba(170,160,74,0)');
+    ctx.strokeStyle = trailGradient2;
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.3, this.y + this.size * 0.5);
+    ctx.lineTo(this.x + this.size * 0.3, this.y + this.size * 1.4);
+    ctx.stroke();
 
     this.drawHealthBar(ctx);
   }
 
   drawExplosive(ctx) {
-    // EXPLOSIVE - Bloated pulsing body
-    const color = this.elite ? '#0ff' : '#993333';
+    // EXPLOSIVE - Unstable kamikaze ship (enhanced)
+    const baseColor = this.elite ? '#0ff' : '#993333';
     const pulse = Math.sin(performance.now() / 150) * 0.15;
-    const bodyY = this.y + this.walkBob;
+    const engineGlow = Math.sin(this.animationPhase) * 0.4 + 0.6;
+    const pulseSize = 1.1 + pulse * 0.3;
 
-    // Elite aura
-    this.drawEliteAura(ctx, bodyY);
-
-    // Explosive warning glow removed - using particles instead
-
-    // Bloated body (bigger) with wobble
-    ctx.fillStyle = color;
-    ctx.save();
-    ctx.translate(this.x, bodyY);
-    ctx.rotate(this.headTilt * 0.3); // Slight wobble
-    ctx.beginPath();
-    ctx.arc(0, 0, this.size * (1.1 + pulse * 0.5), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Pulsing red veins (warning)
-    ctx.strokeStyle = `rgba(255,0,0,${0.7 + pulse})`;
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 4; i++) {
-      const angle = (Math.PI * 2 / 4) * i;
+    // Elite glow
+    if (this.elite) {
+      const eliteGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 1.6);
+      eliteGradient.addColorStop(0, 'rgba(0,255,255,0.25)');
+      eliteGradient.addColorStop(1, 'rgba(0,255,255,0)');
+      ctx.fillStyle = eliteGradient;
       ctx.beginPath();
-      ctx.moveTo(this.x, bodyY);
+      ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Bloated unstable hull (pulsing) with gradient
+    const hullGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * pulseSize);
+    hullGradient.addColorStop(0, baseColor);
+    hullGradient.addColorStop(0.6, '#772222');
+    hullGradient.addColorStop(1, '#551111');
+    ctx.fillStyle = hullGradient;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size * pulseSize, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Warning outline (pulsing red)
+    ctx.strokeStyle = `rgba(255,0,0,${0.8 + pulse})`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(255,100,0,${0.6 + pulse})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Warning lights (pulsing red, enhanced)
+    ctx.strokeStyle = `rgba(255,0,0,${0.8 + pulse})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI * 2 / 6) * i;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
       ctx.lineTo(
-        this.x + Math.cos(angle) * this.size * 0.8,
-        bodyY + Math.sin(angle) * this.size * 0.8
+        this.x + Math.cos(angle) * this.size * 0.95,
+        this.y + Math.sin(angle) * this.size * 0.95
       );
       ctx.stroke();
     }
 
-    // Bulging weak spots (glowing)
-    ctx.fillStyle = `rgba(255,255,0,${0.6 + pulse})`;
+    // Explosive core (glowing yellow, pulsing) with inner core
+    const coreGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 0.5);
+    coreGradient.addColorStop(0, `rgba(255,255,0,${0.9 + pulse})`);
+    coreGradient.addColorStop(0.5, `rgba(255,200,0,${0.7 + pulse})`);
+    coreGradient.addColorStop(1, `rgba(255,150,0,${0.5 + pulse})`);
+    ctx.fillStyle = coreGradient;
     ctx.beginPath();
-    ctx.arc(this.x - this.size * 0.4, bodyY, this.size * 0.3, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.size * 0.45, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Inner core
+    ctx.fillStyle = `rgba(255,255,255,${0.8 + pulse})`;
     ctx.beginPath();
-    ctx.arc(this.x + this.size * 0.4, bodyY, this.size * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Small head with shake
-    ctx.fillStyle = '#c08080';
-    ctx.save();
-    ctx.translate(this.x, bodyY - this.size * 0.8);
-    ctx.rotate(this.headTilt);
-    ctx.beginPath();
-    ctx.arc(0, 0, this.size * 0.35, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.size * 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Distressed eyes
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(-4, 0, 2, 4);
-    ctx.fillRect(2, 0, 2, 4);
-    ctx.restore();
-
-    // Unstable arms (with walk swing + random twitch)
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    if (this.hasLeftArm) {
+    // Unstable engine (erratic) with multiple exhausts
+    const engineColor = this.elite ? `rgba(0,255,255,${engineGlow})` : `rgba(153,51,51,${engineGlow})`;
+    ctx.fillStyle = engineColor;
+    for (let i = 0; i < 3; i++) {
+      const offset = (i - 1) * this.size * 0.2;
       ctx.beginPath();
-      ctx.moveTo(this.x - this.size * 0.7, bodyY);
-      ctx.lineTo(this.x - this.size * 1.0, bodyY + this.size * 0.5 + this.armSwing * 0.3);
-      ctx.stroke();
+      ctx.arc(this.x + offset, this.y + this.size * 0.6, this.size * 0.2, 0, Math.PI * 2);
+      ctx.fill();
     }
-    if (this.hasRightArm) {
+
+    // Erratic engine trails (multiple, wavy)
+    ctx.strokeStyle = `rgba(255,0,0,${engineGlow * 0.6})`;
+    ctx.lineWidth = 4;
+    for (let i = 0; i < 3; i++) {
+      const offset = (i - 1) * this.size * 0.2;
+      const waveOffset = Math.sin(this.animationPhase * 2 + i) * 4;
       ctx.beginPath();
-      ctx.moveTo(this.x + this.size * 0.7, bodyY);
-      ctx.lineTo(this.x + this.size * 1.0, bodyY + this.size * 0.5 - this.armSwing * 0.3);
+      ctx.moveTo(this.x + offset, this.y + this.size * 0.6);
+      ctx.lineTo(this.x + offset + waveOffset, this.y + this.size * 1.3);
       ctx.stroke();
     }
 
@@ -432,82 +610,127 @@ class Zombie {
   }
 
   drawHealer(ctx) {
-    // HEALER - Emaciated dripping body
-    const color = this.elite ? '#0ff' : '#66cccc';
-    const bodyY = this.y + this.walkBob;
+    // HEALER - Support/medical ship (enhanced)
+    const baseColor = this.elite ? '#0ff' : '#66cccc';
+    const darkColor = this.elite ? '#0aa' : '#448888';
+    const engineGlow = Math.sin(this.animationPhase) * 0.3 + 0.7;
+    const healPulse = Math.sin(performance.now() / 300) * 0.2 + 0.8;
 
-    // Elite aura
-    this.drawEliteAura(ctx, bodyY);
-
-    // Healer aura glow removed - using particles instead
-
-    // Skeletal thin body (hunched over)
-    ctx.fillStyle = color;
-    ctx.save();
-    ctx.translate(this.x, bodyY);
-    ctx.rotate(this.headTilt * 0.2);
-    ctx.fillRect(-this.size * 0.4, -this.size * 0.3, this.size * 0.8, this.size * 1.2);
-
-    // Visible ribs
-    ctx.strokeStyle = '#448888';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 4; i++) {
+    // Elite glow
+    if (this.elite) {
+      const eliteGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 1.5);
+      eliteGradient.addColorStop(0, 'rgba(0,255,255,0.25)');
+      eliteGradient.addColorStop(1, 'rgba(0,255,255,0)');
+      ctx.fillStyle = eliteGradient;
       ctx.beginPath();
-      ctx.moveTo(-this.size * 0.3, -this.size * 0.2 + i * this.size * 0.3);
-      ctx.lineTo(this.size * 0.3, -this.size * 0.2 + i * this.size * 0.3);
-      ctx.stroke();
+      ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Glowing green pustules (healing source) - pulsing
-    ctx.fillStyle = '#0f0';
+    // Thin elongated hull (medical ship design) with gradient
+    const hullGradient = ctx.createLinearGradient(this.x, this.y - this.size * 0.8, this.x, this.y + this.size * 0.8);
+    hullGradient.addColorStop(0, baseColor);
+    hullGradient.addColorStop(0.5, darkColor);
+    hullGradient.addColorStop(1, '#336666');
+    ctx.fillStyle = hullGradient;
     ctx.beginPath();
-    ctx.arc(-this.size * 0.3, 0, this.size * 0.2, 0, Math.PI * 2);
+    ctx.ellipse(this.x, this.y, this.size * 0.55, this.size * 0.75, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.beginPath();
-    ctx.arc(this.size * 0.3, this.size * 0.4, this.size * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Gaunt head (with sway)
-    ctx.fillStyle = '#8ac8c8';
-    ctx.save();
-    ctx.translate(this.x, bodyY - this.size * 0.6);
-    ctx.rotate(this.headTilt * 0.8); // Droopy head sway
-    ctx.beginPath();
-    ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Hollow eyes
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(-3, 0, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(3, 0, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Thin drooping arms (swaying)
-    ctx.strokeStyle = color;
+    
+    // Hull outline
+    ctx.strokeStyle = darkColor;
     ctx.lineWidth = 2;
-    if (this.hasLeftArm) {
+    ctx.stroke();
+
+    // Visible structural details (ribs) with highlight
+    ctx.strokeStyle = darkColor;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      const ribY = this.y - this.size * 0.4 + i * this.size * 0.3;
       ctx.beginPath();
-      ctx.moveTo(this.x - this.size * 0.4, bodyY);
-      ctx.lineTo(this.x - this.size * 0.6 - this.armSwing * 0.2, bodyY + this.size * 0.8);
+      ctx.moveTo(this.x - this.size * 0.35, ribY);
+      ctx.lineTo(this.x + this.size * 0.35, ribY);
       ctx.stroke();
-    }
-    if (this.hasRightArm) {
+      // Highlight
+      ctx.strokeStyle = this.elite ? 'rgba(0,255,255,0.4)' : 'rgba(136,204,204,0.4)';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.moveTo(this.x + this.size * 0.4, bodyY);
-      ctx.lineTo(this.x + this.size * 0.6 + this.armSwing * 0.2, bodyY + this.size * 0.8);
+      ctx.moveTo(this.x - this.size * 0.35, ribY);
+      ctx.lineTo(this.x + this.size * 0.35, ribY);
       ctx.stroke();
+      ctx.strokeStyle = darkColor;
+      ctx.lineWidth = 1.5;
     }
 
-    // Dripping green ooze particles
-    if (Math.random() < 0.3) {
-      ctx.fillStyle = 'rgba(0,255,100,0.6)';
+    // Glowing green healing emitters (pulsing) with glow effect
+    const healColor = `rgba(0,255,0,${healPulse})`;
+    for (let i = 0; i < 2; i++) {
+      const emitterX = this.x - this.size * 0.3 + (i * this.size * 0.6);
+      // Outer glow
+      const healGradient = ctx.createRadialGradient(emitterX, this.y, 0, emitterX, this.y, this.size * 0.4);
+      healGradient.addColorStop(0, healColor);
+      healGradient.addColorStop(0.5, `rgba(0,255,0,${healPulse * 0.5})`);
+      healGradient.addColorStop(1, 'rgba(0,255,0,0)');
+      ctx.fillStyle = healGradient;
       ctx.beginPath();
-      ctx.arc(this.x + (Math.random() - 0.5) * this.size, bodyY + this.size, 2, 0, Math.PI * 2);
+      ctx.arc(emitterX, this.y, this.size * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      // Core
+      ctx.fillStyle = healColor;
+      ctx.beginPath();
+      ctx.arc(emitterX, this.y, this.size * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Cockpit with window
+    ctx.fillStyle = darkColor;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.4, this.size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.elite ? '#0ff' : '#aadddd';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.4, this.size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sensor array (glowing)
+    ctx.fillStyle = this.elite ? '#0ff' : '#00ff00';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.2, this.y - this.size * 0.4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.2, this.y - this.size * 0.4, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Small engine (rear) with core
+    const engineColor = this.elite ? `rgba(0,255,255,${engineGlow})` : `rgba(102,204,204,${engineGlow})`;
+    ctx.fillStyle = engineColor;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y + this.size * 0.6, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.elite ? '#0ff' : '#88ffff';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y + this.size * 0.6, this.size * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Engine trail with gradient
+    const trailGradient = ctx.createLinearGradient(
+      this.x, this.y + this.size * 0.6,
+      this.x, this.y + this.size * 1.2
+    );
+    trailGradient.addColorStop(0, engineColor);
+    trailGradient.addColorStop(1, 'rgba(102,204,204,0)');
+    ctx.strokeStyle = trailGradient;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y + this.size * 0.6);
+    ctx.lineTo(this.x, this.y + this.size * 1.2);
+    ctx.stroke();
+
+    // Healing particle trail (more frequent)
+    if (Math.random() < 0.4) {
+      ctx.fillStyle = `rgba(0,255,100,${healPulse * 0.7})`;
+      ctx.beginPath();
+      ctx.arc(this.x + (Math.random() - 0.5) * this.size, this.y + this.size * 0.8, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -515,60 +738,133 @@ class Zombie {
   }
 
   drawNormal(ctx) {
-    // NORMAL - Basic alien scout ship
-    const color = this.elite ? '#0ff' : '#4488ff';
-    const bodyY = this.y + this.walkBob;
+    // NORMAL - Basic scout fighter (enhanced)
+    const baseColor = this.elite ? '#0ff' : '#4488ff';
+    const darkColor = this.elite ? '#0aa' : '#334466';
+    const engineGlow = Math.sin(this.animationPhase) * 0.3 + 0.7;
 
-    // Elite aura
-    this.drawEliteAura(ctx, bodyY);
+    // Elite glow
+    if (this.elite) {
+      const eliteGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 1.4);
+      eliteGradient.addColorStop(0, 'rgba(0,255,255,0.25)');
+      eliteGradient.addColorStop(1, 'rgba(0,255,255,0)');
+      ctx.fillStyle = eliteGradient;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    // Main hull
-    ctx.fillStyle = '#334466';
-    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.3, this.size, this.size * 1.2);
-    // Energy core
-    ctx.fillStyle = '#0088ff';
-    ctx.fillRect(this.x - this.size * 0.1, bodyY - this.size * 0.2, this.size * 0.2, this.size * 0.8);
-
-    // Ship body
-    ctx.fillStyle = color;
-    ctx.fillRect(this.x - this.size * 0.6, bodyY - this.size * 0.5, this.size * 1.2, this.size * 1.4);
-
-    // Cockpit
-    ctx.fillStyle = '#6699ff';
-    ctx.save();
-    ctx.translate(this.x, bodyY - this.size * 0.6);
-    ctx.rotate(0.3 + this.headTilt);
+    // Main hull with gradient
+    const hullGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 0.7);
+    hullGradient.addColorStop(0, darkColor);
+    hullGradient.addColorStop(0.6, baseColor);
+    hullGradient.addColorStop(1, '#223344');
+    ctx.fillStyle = hullGradient;
     ctx.beginPath();
-    ctx.arc(0, 0, this.size * 0.45, 0, Math.PI * 2);
+    ctx.ellipse(this.x, this.y, this.size * 0.55, this.size * 0.65, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Engine lights
-    ctx.fillStyle = '#0ff';
-    ctx.fillRect(-4, 0, 2, 2);
-    ctx.fillRect(2, 0, 2, 2);
-    ctx.restore();
+    // Energy core (glowing)
+    const corePulse = Math.sin(this.animationPhase * 2) * 0.2 + 0.8;
+    ctx.fillStyle = `rgba(0,136,255,${corePulse})`;
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y, this.size * 0.18, this.size * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Wing thrusters
-    ctx.strokeStyle = color;
+    // Ship body with outline
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y, this.size * 0.65, this.size * 0.75, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = darkColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Cockpit with window
+    ctx.fillStyle = darkColor;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.4, this.size * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.elite ? '#0ff' : '#88bbff';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y - this.size * 0.4, this.size * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Engine lights (glowing) with cores
+    const engineColor = this.elite ? `rgba(0,255,255,${engineGlow})` : `rgba(0,136,255,${engineGlow})`;
+    ctx.fillStyle = engineColor;
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.3, this.y + this.size * 0.4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.1, this.y + this.size * 0.4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.elite ? '#0ff' : '#00aaff';
+    ctx.beginPath();
+    ctx.arc(this.x - this.size * 0.3, this.y + this.size * 0.4, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x + this.size * 0.1, this.y + this.size * 0.4, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wing thrusters with detail
+    ctx.strokeStyle = baseColor;
     ctx.lineWidth = 3;
-    if (this.hasLeftArm) {
-      ctx.beginPath();
-      ctx.moveTo(this.x - this.size * 0.6, bodyY);
-      ctx.lineTo(this.x - this.size * 1.0, bodyY + this.size * 0.4 + this.armSwing * 0.3);
-      ctx.stroke();
-    }
-    if (this.hasRightArm) {
-      ctx.beginPath();
-      ctx.moveTo(this.x + this.size * 0.6, bodyY);
-      ctx.lineTo(this.x + this.size * 1.0, bodyY + this.size * 0.4 - this.armSwing * 0.3);
-      ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.5, this.y);
+    ctx.lineTo(this.x - this.size * 0.85, this.y + this.size * 0.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.5, this.y);
+    ctx.lineTo(this.x + this.size * 0.85, this.y + this.size * 0.5);
+    ctx.stroke();
+    
+    // Wing highlights
+    ctx.strokeStyle = this.elite ? '#0ff' : '#6699ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.5, this.y);
+    ctx.lineTo(this.x - this.size * 0.85, this.y + this.size * 0.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.5, this.y);
+    ctx.lineTo(this.x + this.size * 0.85, this.y + this.size * 0.5);
+    ctx.stroke();
 
-    // Antenna variant
+    // Engine trails with gradient
+    const trailGradient1 = ctx.createLinearGradient(
+      this.x - this.size * 0.3, this.y + this.size * 0.4,
+      this.x - this.size * 0.3, this.y + this.size * 1.0
+    );
+    trailGradient1.addColorStop(0, engineColor);
+    trailGradient1.addColorStop(1, 'rgba(68,136,255,0)');
+    ctx.strokeStyle = trailGradient1;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size * 0.3, this.y + this.size * 0.4);
+    ctx.lineTo(this.x - this.size * 0.3, this.y + this.size * 1.0);
+    ctx.stroke();
+    
+    const trailGradient2 = ctx.createLinearGradient(
+      this.x + this.size * 0.1, this.y + this.size * 0.4,
+      this.x + this.size * 0.1, this.y + this.size * 1.0
+    );
+    trailGradient2.addColorStop(0, engineColor);
+    trailGradient2.addColorStop(1, 'rgba(68,136,255,0)');
+    ctx.strokeStyle = trailGradient2;
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size * 0.1, this.y + this.size * 0.4);
+    ctx.lineTo(this.x + this.size * 0.1, this.y + this.size * 1.0);
+    ctx.stroke();
+
+    // Antenna variant (sensor array) - enhanced
     if (this.variant === 'hat') {
-      ctx.fillStyle = '#0088ff';
-      ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.95, this.size, 4);
-      ctx.fillRect(this.x - this.size * 0.3, bodyY - this.size * 1.1, this.size * 0.6, 6);
+      ctx.fillStyle = this.elite ? '#0ff' : '#0088ff';
+      ctx.fillRect(this.x - this.size * 0.45, this.y - this.size * 0.85, this.size * 0.9, 4);
+      ctx.fillRect(this.x - this.size * 0.3, this.y - this.size * 1.0, this.size * 0.6, 6);
+      // Sensor glow
+      ctx.fillStyle = `rgba(0,136,255,0.5)`;
+      ctx.fillRect(this.x - this.size * 0.45, this.y - this.size * 0.85, this.size * 0.9, 2);
     }
 
     this.drawHealthBar(ctx);

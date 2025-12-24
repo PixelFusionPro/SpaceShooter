@@ -17,8 +17,8 @@ const CONFIG = {
     MULTISHOT_COUNT: 3, // Number of bullets when multishot active
   },
 
-  // Zombies
-  ZOMBIES: {
+  // Enemies
+  ENEMIES: {
     NORMAL: { SIZE: 7.5, SPEED: 0.9, HEALTH: 2 },
     TANK: { SIZE: 11, SPEED: 0.5, HEALTH: 5 },
     RUNNER: { SIZE: 6, SPEED: 1.5, HEALTH: 1 },
@@ -33,7 +33,7 @@ const CONFIG = {
 
   // Wave System
   WAVE: {
-    ZOMBIES_PER_WAVE_MULTIPLIER: 4,
+    ENEMIES_PER_WAVE_MULTIPLIER: 4,
     BOSS_WAVE_INTERVAL: 5,
     DIFFICULTY_SCALING: 0.05, // 5% increase per wave
     RARE_SPAWN_EXPLOSIVE: 0.05,
@@ -76,7 +76,7 @@ const CONFIG = {
     DUST_LIFETIME: 30,
     TRAIL_LIFETIME: 20,
     SPARKLE_LIFETIME: 30,
-    BLOOD_LIFETIME: 25,
+    DEBRIS_LIFETIME: 25,
     NOTICE_LIFETIME: 40,
   },
 

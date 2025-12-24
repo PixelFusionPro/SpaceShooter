@@ -17,6 +17,18 @@ class Player {
     this.lastKillTime = 0;
     this.killStreak = 0;
     
+    // Spaceship rotation and momentum
+    this.angle = -Math.PI / 2; // Current rotation angle (radians) - start facing up
+    this.angularVelocity = 0; // Angular momentum (rotation continues)
+    this.rotationSpeed = 0.08; // Rotation acceleration (radians per frame^2)
+    this.rotationDamping = 0.92; // Angular friction
+    this.maxAngularSpeed = 0.12; // Max rotation speed
+    
+    this.acceleration = 0.12; // Thrust acceleration rate
+    this.friction = 0.95; // Linear friction/drag (more momentum)
+    this.maxSpeed = 0; // Will be set by speed property
+    this.thrustActive = false; // Track if thrusters are firing
+    
     // Phase 3: Death animation
     this.dying = false;
     this.deathProgress = 0;
@@ -50,13 +62,52 @@ class Player {
       return; // Don't update movement or other animations during death
     }
     
-    this.idleOffset = Math.sin(performance.now() / 300) * 1.5;
+    // Spaceship rotation: angular momentum physics
+    // Apply angular damping (friction)
+    this.angularVelocity *= this.rotationDamping;
+    
+    // Update angle based on angular velocity
+    this.angle += this.angularVelocity;
+    
+    // Normalize angle to [0, 2*PI]
+    while (this.angle < 0) this.angle += Math.PI * 2;
+    while (this.angle >= Math.PI * 2) this.angle -= Math.PI * 2;
+    
+    // Apply linear friction/drag to velocity (spaceship momentum)
+    // Use velocity-dependent drag for more realistic feel
+    const speed = Math.hypot(this.vx, this.vy);
+    if (speed > 0.01) {
+      const dragFactor = 1 - (1 - this.friction) * (1 + speed * 0.1); // More drag at higher speeds
+      this.vx *= dragFactor;
+      this.vy *= dragFactor;
+    } else {
+      // Stop tiny movements
+      this.vx = 0;
+      this.vy = 0;
+    }
+    
+    // Update position based on velocity
     this.x += this.vx;
     this.y += this.vy;
 
-    // Keep player in bounds
-    this.x = Math.max(this.size, Math.min(this.canvas.width - this.size, this.x));
-    this.y = Math.max(this.size, Math.min(this.canvas.height - this.size, this.y));
+    // Smooth boundary handling (bounce back with damping instead of hard stop)
+    const margin = this.size;
+    if (this.x < margin) {
+      this.x = margin;
+      this.vx *= -0.5; // Bounce back with 50% velocity
+    } else if (this.x > this.canvas.width - margin) {
+      this.x = this.canvas.width - margin;
+      this.vx *= -0.5;
+    }
+    if (this.y < margin) {
+      this.y = margin;
+      this.vy *= -0.5;
+    } else if (this.y > this.canvas.height - margin) {
+      this.y = this.canvas.height - margin;
+      this.vy *= -0.5;
+    }
+    
+    this.idleOffset = Math.sin(performance.now() / 300) * 1.5;
 
     if (this.reloadProgress > 0) {
       this.reloadProgress -= 0.05;
@@ -329,6 +380,12 @@ class Player {
       ctx.translate(-this.x, -(this.y + this.idleOffset));
     }
 
+    // Apply spaceship rotation - rotate around ship center
+    ctx.save();
+    ctx.translate(this.x, this.y + this.idleOffset);
+    ctx.rotate(this.angle);
+    ctx.translate(-this.x, -(this.y + this.idleOffset));
+
     // Draw motion trails (when moving)
     this.drawMotionTrails(ctx);
 
@@ -412,78 +469,208 @@ class Player {
     // Draw multikill texts (on top)
     this.drawMultikillTexts(ctx);
     
+    // Restore rotation transform
+    ctx.restore();
+    
     // Phase 3: Restore context after spawn/death animation transforms
     ctx.restore();
   }
 
   drawLightArmor(ctx, rank) {
-    // SPACESHIP - Player's ship
+    // SPACESHIP - Player's ship (pointing upward by default, rotation applied in draw())
     const bodyY = this.y + this.idleOffset;
+    const speed = Math.hypot(this.vx, this.vy);
+    const isMoving = speed > 0.1;
 
-    // Engine thrusters (animated glow)
-    const thrustGlow = Math.sin(performance.now() / 100) * 0.3 + 0.7;
+    // Engine thrusters (animated glow, stronger when thrusting)
+    const thrustGlow = this.thrustActive ? (Math.sin(performance.now() / 60) * 0.5 + 0.9) : (Math.sin(performance.now() / 300) * 0.15 + 0.3);
+      const speed = Math.hypot(this.vx, this.vy);
+      const thrustIntensity = Math.min(speed / this.speed, 1.5); // Scale with speed
+    
+    // Draw engine trails behind ship (pointing opposite to ship's facing direction)
+    if (this.thrustActive || speed > 0.5) {
+      // Thrust direction is opposite to ship's facing angle
+      const thrustAngle = this.angle + Math.PI;
+      const trailLength = Math.min(speed * 4, this.size * 2.5) * thrustIntensity;
+      
+      // Left engine trail (with gradient effect)
+      ctx.save();
+      const gradient1 = ctx.createLinearGradient(
+        this.x - this.size * 0.4, bodyY + this.size * 0.8,
+        this.x - this.size * 0.4 + Math.cos(thrustAngle) * trailLength,
+        bodyY + this.size * 0.8 + Math.sin(thrustAngle) * trailLength
+      );
+      gradient1.addColorStop(0, `rgba(0, 255, 255, ${thrustGlow * 0.8})`);
+      gradient1.addColorStop(0.5, `rgba(0, 200, 255, ${thrustGlow * 0.4})`);
+      gradient1.addColorStop(1, 'rgba(0, 150, 255, 0)');
+      ctx.strokeStyle = gradient1;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.size * 0.4, bodyY + this.size * 0.8);
+      ctx.lineTo(
+        this.x - this.size * 0.4 + Math.cos(thrustAngle) * trailLength,
+        bodyY + this.size * 0.8 + Math.sin(thrustAngle) * trailLength
+      );
+      ctx.stroke();
+      
+      // Right engine trail
+      const gradient2 = ctx.createLinearGradient(
+        this.x + this.size * 0.4, bodyY + this.size * 0.8,
+        this.x + this.size * 0.4 + Math.cos(thrustAngle) * trailLength,
+        bodyY + this.size * 0.8 + Math.sin(thrustAngle) * trailLength
+      );
+      gradient2.addColorStop(0, `rgba(0, 255, 255, ${thrustGlow * 0.8})`);
+      gradient2.addColorStop(0.5, `rgba(0, 200, 255, ${thrustGlow * 0.4})`);
+      gradient2.addColorStop(1, 'rgba(0, 150, 255, 0)');
+      ctx.strokeStyle = gradient2;
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.size * 0.4, bodyY + this.size * 0.8);
+      ctx.lineTo(
+        this.x + this.size * 0.4 + Math.cos(thrustAngle) * trailLength,
+        bodyY + this.size * 0.8 + Math.sin(thrustAngle) * trailLength
+      );
+      ctx.stroke();
+      ctx.restore();
+    }
+    
     ctx.fillStyle = `rgba(0, 200, 255, ${thrustGlow})`;
+    
+    // Rotation thruster effects (when rotating)
+    if (Math.abs(this.angularVelocity) > 0.01) {
+      const rotationThrust = Math.min(Math.abs(this.angularVelocity) * 10, 0.8);
+      // Left rotation thruster (when rotating right)
+      if (this.angularVelocity > 0) {
+        ctx.fillStyle = `rgba(255,100,0,${rotationThrust})`;
+        ctx.beginPath();
+        ctx.arc(this.x - this.size * 0.7, bodyY, this.size * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Right rotation thruster (when rotating left)
+      if (this.angularVelocity < 0) {
+        ctx.fillStyle = `rgba(255,100,0,${rotationThrust})`;
+        ctx.beginPath();
+        ctx.arc(this.x + this.size * 0.7, bodyY, this.size * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
     // Left engine
-    ctx.fillRect(this.x - this.size * 0.9, bodyY + this.size * 0.9, this.size * 0.4, this.size * 0.6);
+    ctx.fillStyle = `rgba(0, 200, 255, ${thrustGlow})`;
+    ctx.fillRect(this.x - this.size * 0.9, bodyY + this.size * 0.7, this.size * 0.4, this.size * 0.4);
     // Right engine
-    ctx.fillRect(this.x + this.size * 0.5, bodyY + this.size * 0.9, this.size * 0.4, this.size * 0.6);
+    ctx.fillRect(this.x + this.size * 0.5, bodyY + this.size * 0.7, this.size * 0.4, this.size * 0.4);
+    
+    // Engine cores (brighter center)
+    ctx.fillStyle = '#00ffff';
+    ctx.fillRect(this.x - this.size * 0.85, bodyY + this.size * 0.75, this.size * 0.15, this.size * 0.15);
+    ctx.fillRect(this.x + this.size * 0.55, bodyY + this.size * 0.75, this.size * 0.15, this.size * 0.15);
 
-    // Wings
-    ctx.fillStyle = '#0066cc';
+    // Wings (swept back design) with gradient
+    const wingGradient = ctx.createLinearGradient(this.x - this.size * 0.8, bodyY, this.x, bodyY);
+    wingGradient.addColorStop(0, '#004488');
+    wingGradient.addColorStop(1, '#0066cc');
+    ctx.fillStyle = wingGradient;
     // Left wing
     ctx.beginPath();
-    ctx.moveTo(this.x - this.size, bodyY);
-    ctx.lineTo(this.x - this.size * 0.5, bodyY - this.size * 0.3);
-    ctx.lineTo(this.x - this.size * 0.5, bodyY + this.size);
+    ctx.moveTo(this.x - this.size * 0.8, bodyY);
+    ctx.lineTo(this.x - this.size * 0.3, bodyY - this.size * 0.2);
+    ctx.lineTo(this.x - this.size * 0.3, bodyY + this.size * 0.8);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#0088ff';
     ctx.lineWidth = 2;
+    ctx.stroke();
+    // Wing highlight
+    ctx.strokeStyle = '#00aaff';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
     // Right wing
     ctx.beginPath();
-    ctx.moveTo(this.x + this.size, bodyY);
-    ctx.lineTo(this.x + this.size * 0.5, bodyY - this.size * 0.3);
-    ctx.lineTo(this.x + this.size * 0.5, bodyY + this.size);
+    ctx.moveTo(this.x + this.size * 0.8, bodyY);
+    ctx.lineTo(this.x + this.size * 0.3, bodyY - this.size * 0.2);
+    ctx.lineTo(this.x + this.size * 0.3, bodyY + this.size * 0.8);
     ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Main hull (body)
-    ctx.fillStyle = '#0088ff';
-    ctx.fillRect(this.x - this.size * 0.5, bodyY - this.size * 0.5, this.size, this.size * 1.6);
-
-    // Hull details
-    ctx.fillStyle = '#0066cc';
-    ctx.fillRect(this.x - this.size * 0.4, bodyY - this.size * 0.3, this.size * 0.8, this.size * 1.2);
-
-    // Cockpit window
-    ctx.fillStyle = '#00ffff';
-    ctx.beginPath();
-    ctx.arc(this.x, bodyY - this.size * 0.3, this.size * 0.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#0088ff';
     ctx.lineWidth = 2;
     ctx.stroke();
+    ctx.strokeStyle = '#00aaff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
-    // Energy core
-    const pulseSize = Math.sin(performance.now() / 150) * 0.1 + 0.9;
-    ctx.fillStyle = `rgba(0, 255, 255, ${thrustGlow})`;
+    // Main hull (body) - streamlined with gradient
+    const hullGradient = ctx.createRadialGradient(this.x, bodyY, 0, this.x, bodyY, this.size * 0.9);
+    hullGradient.addColorStop(0, '#00aaff');
+    hullGradient.addColorStop(0.6, '#0088ff');
+    hullGradient.addColorStop(1, '#0066cc');
+    ctx.fillStyle = hullGradient;
     ctx.beginPath();
-    ctx.arc(this.x, bodyY + this.size * 0.5, this.size * 0.3 * pulseSize, 0, Math.PI * 2);
+    ctx.ellipse(this.x, bodyY, this.size * 0.55, this.size * 0.85, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0066cc';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Hull details with depth
+    ctx.fillStyle = '#0066cc';
+    ctx.beginPath();
+    ctx.ellipse(this.x, bodyY, this.size * 0.42, this.size * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Detail highlight
+    ctx.fillStyle = 'rgba(0,170,255,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(this.x, bodyY - this.size * 0.2, this.size * 0.35, this.size * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Nose cone
-    ctx.fillStyle = '#0099ff';
+    // Cockpit window (at front of ship) with glow
+    const cockpitGradient = ctx.createRadialGradient(this.x, bodyY - this.size * 0.5, 0, this.x, bodyY - this.size * 0.5, this.size * 0.4);
+    cockpitGradient.addColorStop(0, '#00ffff');
+    cockpitGradient.addColorStop(0.7, '#00aaff');
+    cockpitGradient.addColorStop(1, '#0088ff');
+    ctx.fillStyle = cockpitGradient;
     ctx.beginPath();
-    ctx.moveTo(this.x, bodyY - this.size * 1.2);
-    ctx.lineTo(this.x - this.size * 0.5, bodyY - this.size * 0.5);
-    ctx.lineTo(this.x + this.size * 0.5, bodyY - this.size * 0.5);
+    ctx.arc(this.x, bodyY - this.size * 0.5, this.size * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0088ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Window highlight
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Energy core (center) with pulsing
+    const pulseSize = Math.sin(performance.now() / 150) * 0.1 + 0.9;
+    const coreGradient = ctx.createRadialGradient(this.x, bodyY, 0, this.x, bodyY, this.size * 0.3);
+    coreGradient.addColorStop(0, `rgba(0, 255, 255, ${thrustGlow})`);
+    coreGradient.addColorStop(0.5, `rgba(0, 200, 255, ${thrustGlow * 0.7})`);
+    coreGradient.addColorStop(1, `rgba(0, 150, 255, ${thrustGlow * 0.3})`);
+    ctx.fillStyle = coreGradient;
+    ctx.beginPath();
+    ctx.arc(this.x, bodyY, this.size * 0.28 * pulseSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nose cone (pointed front) with gradient
+    const noseGradient = ctx.createLinearGradient(this.x, bodyY - this.size * 1.0, this.x, bodyY - this.size * 0.3);
+    noseGradient.addColorStop(0, '#00ccff');
+    noseGradient.addColorStop(1, '#0099ff');
+    ctx.fillStyle = noseGradient;
+    ctx.beginPath();
+    ctx.moveTo(this.x, bodyY - this.size * 1.05);
+    ctx.lineTo(this.x - this.size * 0.42, bodyY - this.size * 0.3);
+    ctx.lineTo(this.x + this.size * 0.42, bodyY - this.size * 0.3);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#00ffff';
     ctx.lineWidth = 2;
+    ctx.stroke();
+    // Nose highlight
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(this.x, bodyY - this.size * 1.05);
+    ctx.lineTo(this.x, bodyY - this.size * 0.3);
     ctx.stroke();
   }
 

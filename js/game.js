@@ -72,7 +72,7 @@ class ZombieGame {
     this.powerupManager = new PowerupManager(canvas, this.particleManager);
     this.achievementManager = new AchievementManager();
     this.waveManager = new WaveManager(canvas);
-    this.zombieManager = new ZombieManager(canvas, this.particleManager);
+    this.enemyManager = new EnemyManager(canvas, this.particleManager);
     this.fortressManager = new FortressManager(canvas);
 
     // Object pools for performance (must be created before companionManager)
@@ -83,7 +83,7 @@ class ZombieGame {
     );
     
     // Set fortress manager references for tower shooting
-    this.fortressManager.setReferences(this.bulletPool, this.zombieManager);
+    this.fortressManager.setReferences(this.bulletPool, this.enemyManager);
     
     // Companion manager needs bulletPool, so create it after
     this.companionManager = new CompanionManager(canvas, this.bulletPool);
@@ -106,6 +106,7 @@ class ZombieGame {
   initUIElements() {
     this.healthFill = document.getElementById('healthfill') || document.querySelector('.health-fill');
     this.damageFlash = document.getElementById('damageFlash');
+    this.achievementNotification = document.getElementById('achievementNotification');
   }
 
   reset() {
@@ -131,7 +132,7 @@ class ZombieGame {
     this.player.health = maxHealth;
 
     // Reset all managers
-    this.zombieManager.reset();
+    this.enemyManager.reset();
     this.waveManager.reset();
     this.scoreManager.reset();
     this.powerupManager.reset();
@@ -159,8 +160,8 @@ class ZombieGame {
     }
 
     // Spawn first wave
-    const zombies = this.waveManager.spawnWave();
-    this.zombieManager.addZombies(zombies);
+    const enemies = this.waveManager.spawnWave();
+    this.enemyManager.addEnemies(enemies);
 
     // Start game loop
     requestAnimationFrame(() => this.loop());
@@ -292,13 +293,13 @@ class ZombieGame {
   }
 
   handleBulletCollisions() {
-    this.zombieManager.checkBulletCollisions(
+    this.enemyManager.checkBulletCollisions(
       this.bulletPool,
-      (zombie, index, damageDealt) => this.onZombieHit(zombie, index, damageDealt)
+      (enemy, index, damageDealt) => this.onEnemyHit(enemy, index, damageDealt)
     );
   }
 
-  onZombieHit(zombie, index, damageDealt) {
+  onEnemyHit(enemy, index, damageDealt) {
     // Track bullet hit
     this.statisticsManager.trackBulletHit();
 
@@ -307,7 +308,7 @@ class ZombieGame {
     this.ctx.globalAlpha = 0.5;
     this.ctx.fillStyle = 'white';
     this.ctx.beginPath();
-    this.ctx.arc(zombie.x, zombie.y, zombie.size * 1.2, 0, Math.PI * 2);
+    this.ctx.arc(enemy.x, enemy.y, enemy.size * 1.2, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.restore();
 
@@ -324,22 +325,22 @@ class ZombieGame {
       }
     }
 
-    // Zombie killed
-    if (zombie.health <= 0) {
-      this.handleZombieKill(zombie, index);
+    // Enemy killed
+    if (enemy.health <= 0) {
+      this.handleEnemyKill(enemy, index);
     }
   }
 
-  handleZombieKill(zombie, index) {
+  handleEnemyKill(enemy, index) {
     // Calculate hit angle for death animation
-    const dx = zombie.x - this.player.x;
-    const dy = zombie.y - this.player.y;
+    const dx = enemy.x - this.player.x;
+    const dy = enemy.y - this.player.y;
     const hitAngle = Math.atan2(dy, dx);
 
-    // Kill zombie (start death animation)
-    this.zombieManager.killZombie(index, hitAngle, (killedZombie) => {
+    // Kill enemy (start death animation)
+    this.enemyManager.killEnemy(index, hitAngle, (killedEnemy) => {
       // Track kill in achievement manager
-      this.achievementManager.trackKill(killedZombie);
+      this.achievementManager.trackKill(killedEnemy);
 
       // Track kill in statistics
       this.statisticsManager.trackKill();
@@ -361,20 +362,20 @@ class ZombieGame {
       // Track multikill
       this.player.addKill();
 
-      // Spawn blood particles
-      const particleCount = killedZombie.type === 'boss' ? 30 : 12;
-      const isHealer = killedZombie.type === 'healer';
-      this.particleManager.spawnBloodSpray(killedZombie.x, killedZombie.y, hitAngle, particleCount, killedZombie.type === 'boss', isHealer);
+      // Spawn debris particles
+      const particleCount = killedEnemy.type === 'boss' ? 30 : 12;
+      const isHealer = killedEnemy.type === 'healer';
+      this.particleManager.spawnDebrisSpray(killedEnemy.x, killedEnemy.y, hitAngle, particleCount, killedEnemy.type === 'boss', isHealer);
 
       // Boss explosion effects
-      if (killedZombie.type === 'boss') {
-        this.particleManager.spawnBossExplosionRing(killedZombie.x, killedZombie.y);
+      if (killedEnemy.type === 'boss') {
+        this.particleManager.spawnBossExplosionRing(killedEnemy.x, killedEnemy.y);
         this.screenShake(12, 5);
       }
 
       // Powerup drop
-      if (this.powerupManager.checkDropChance(this.zombieManager.getKillCount())) {
-        this.powerupManager.spawn(killedZombie.x, killedZombie.y);
+      if (this.powerupManager.checkDropChance(this.enemyManager.getKillCount())) {
+        this.powerupManager.spawn(killedEnemy.x, killedEnemy.y);
       }
 
       // Check for rank change
@@ -762,8 +763,8 @@ class ZombieGame {
     // Update player
     this.player.update();
 
-    // Update zombies and handle collision - skip damage during death
-    const damage = this.zombieManager.update(
+    // Update enemies and handle collision - skip damage during death
+    const damage = this.enemyManager.update(
       this.player.x,
       this.player.y,
       this.powerupManager.isShieldActive()
@@ -780,19 +781,19 @@ class ZombieGame {
     this.companionManager.update(
       this.player.x,
       this.player.y,
-      this.zombieManager,
+      this.enemyManager,
       this.player,
       boosts
     );
 
-    // Check companion-zombie collisions
-    this.companionManager.checkZombieCollisions(this.zombieManager.zombies);
+    // Check companion-enemy collisions
+    this.companionManager.checkEnemyCollisions(this.enemyManager.enemies);
 
     // Update fortress structures
     this.fortressManager.update();
 
-    // Handle fortress-zombie collisions
-    this.fortressManager.handleZombieCollisions(this.zombieManager.zombies);
+    // Handle fortress-enemy collisions
+    this.fortressManager.handleEnemyCollisions(this.enemyManager.enemies);
 
     // Handle bullet collisions with fortress structures
     this.fortressManager.handleBulletCollisions(this.bulletPool);
@@ -825,8 +826,8 @@ class ZombieGame {
     }
 
     // Wave completion check
-    const aliveZombies = this.zombieManager.getAliveCount();
-    if (this.waveManager.isWaveComplete(aliveZombies)) {
+    const aliveEnemies = this.enemyManager.getAliveCount();
+    if (this.waveManager.isWaveComplete(aliveEnemies)) {
       const scoreData = this.scoreManager.getData();
       this.waveManager.completeWave(scoreData.score, this.scoreManager, this.shopManager);
 
@@ -873,12 +874,12 @@ class ZombieGame {
       this.checkFortressTierUnlocks(currentWave);
     }
 
-    // Start next wave (only after wave completion delay and if no zombies)
-    // Only spawn if wave is not pending and there are truly no zombies (alive or dying)
-    if (!this.waveManager.isPending() && aliveZombies === 0 && this.zombieManager.getTotalCount() === 0 && this.waveManager.waveStarted === false) {
-      const zombies = this.waveManager.spawnWave();
-      if (zombies && zombies.length > 0) {
-        this.zombieManager.addZombies(zombies);
+    // Start next wave (only after wave completion delay and if no enemies)
+    // Only spawn if wave is not pending and there are truly no enemies (alive or dying)
+    if (!this.waveManager.isPending() && aliveEnemies === 0 && this.enemyManager.getTotalCount() === 0 && this.waveManager.waveStarted === false) {
+      const enemies = this.waveManager.spawnWave();
+      if (enemies && enemies.length > 0) {
+        this.enemyManager.addEnemies(enemies);
       }
     }
 
@@ -886,7 +887,7 @@ class ZombieGame {
     if (this.player.health <= 0 && !this.gameOver && !this.player.dying) {
       this.player.startDeath();
       // Spawn death particles
-      this.particleManager.spawnBloodSpray(this.player.x, this.player.y, 0, 20, false, false);
+      this.particleManager.spawnDebrisSpray(this.player.x, this.player.y, 0, 20, false, false);
       // Spawn explosion ring
       this.particleManager.spawnBossExplosionRing(this.player.x, this.player.y);
     }
