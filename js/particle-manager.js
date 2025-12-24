@@ -138,10 +138,10 @@ class ParticleManager {
     }
   }
 
-  // Spawn directional blood spray
-  spawnBloodSpray(x, y, hitAngle, count, isBoss = false, isHealer = false) {
+  // Spawn directional debris spray
+  spawnDebrisSpray(x, y, hitAngle, count, isBoss = false, isHealer = false) {
     const particleCount = count || (isBoss ? 30 : 12);
-    const baseColor = isHealer ? 'rgba(0,180,100,0.7)' : 'rgba(180,0,0,0.7)';
+    const baseColor = isHealer ? 'rgba(0,180,100,0.7)' : 'rgba(150,150,150,0.7)'; // Gray debris instead of red blood
 
     for (let i = 0; i < particleCount; i++) {
       // Spray in the hit direction (away from player)
@@ -150,13 +150,13 @@ class ParticleManager {
       const speed = Math.random() * 4 + 2;
       const size = isBoss ? Math.random() * 3 + 3 : Math.random() * 2 + 1;
 
-      this.bloodParticles.add({
+      this.debrisParticles.add({
         x,
         y,
         dx: Math.cos(angle) * speed,
         dy: Math.sin(angle) * speed,
-        life: CONFIG.PARTICLES.BLOOD_LIFETIME,
-        maxLife: CONFIG.PARTICLES.BLOOD_LIFETIME,
+        life: CONFIG.PARTICLES.DEBRIS_LIFETIME,
+        maxLife: CONFIG.PARTICLES.DEBRIS_LIFETIME,
         size: size,
         color: baseColor
       });
@@ -168,15 +168,15 @@ class ParticleManager {
     for (let i = 0; i < 20; i++) {
       const angle = (Math.PI * 2 / 20) * i;
       const speed = Math.random() * 2 + 3;
-      this.bloodParticles.add({
+      this.debrisParticles.add({
         x,
         y,
         dx: Math.cos(angle) * speed,
         dy: Math.sin(angle) * speed,
-        life: CONFIG.PARTICLES.BLOOD_LIFETIME * 1.5,
-        maxLife: CONFIG.PARTICLES.BLOOD_LIFETIME * 1.5,
+        life: CONFIG.PARTICLES.DEBRIS_LIFETIME * 1.5,
+        maxLife: CONFIG.PARTICLES.DEBRIS_LIFETIME * 1.5,
         size: 5,
-        color: 'rgba(255,100,0,0.8)'
+        color: 'rgba(255,200,0,0.8)' // Orange/yellow explosion debris
       });
     }
   }
