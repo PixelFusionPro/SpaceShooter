@@ -315,7 +315,7 @@ class ParticleManager {
     this.dustParticles.update();
     this.trailParticles.update();
     this.sparkleParticles.update();
-    this.bloodParticles.update();
+    this.debrisParticles.update();
     this.speedEnergyParticles.update();
     this.multishotParticles.update();
     this.healParticles.update();
