@@ -150,22 +150,22 @@ class Bullet {
     }
   }
 
-  checkCollision(zombie) {
-    // Check if already pierced this zombie
-    if (this.piercedZombies.includes(zombie)) {
+  checkCollision(enemy) {
+    // Check if already pierced this enemy
+    if (this.piercedEnemies.includes(enemy)) {
       return false;
     }
-    return Math.hypot(this.x - zombie.x, this.y - zombie.y) < zombie.size;
+    return Math.hypot(this.x - enemy.x, this.y - enemy.y) < enemy.size;
   }
 
-  markPierced(zombie) {
-    // Mark zombie as pierced
-    if (!this.piercedZombies.includes(zombie)) {
-      this.piercedZombies.push(zombie);
+  markPierced(enemy) {
+    // Mark enemy as pierced
+    if (!this.piercedEnemies.includes(enemy)) {
+      this.piercedEnemies.push(enemy);
     }
   }
 
   canPierce() {
-    return this.piercedZombies.length < this.pierceCount;
+    return this.piercedEnemies.length < this.pierceCount;
   }
 }
