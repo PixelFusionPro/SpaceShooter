@@ -167,6 +167,19 @@ class ZombieGame {
   }
 
   handlePauseToggle(isPaused) {
+    // Handle pause screen overlay visibility
+    if (typeof screenManager !== 'undefined' && screenManager) {
+      if (isPaused) {
+        // Just paused - show pause screen
+        updatePauseStats();
+        screenManager.showOverlay('pauseScreen');
+      } else {
+        // Just unpaused - hide pause screen
+        screenManager.hideOverlay('pauseScreen');
+      }
+    }
+
+    // Restart game loop when unpausing
     if (!isPaused && !this.gameOver) {
       requestAnimationFrame(() => this.loop());
     }
