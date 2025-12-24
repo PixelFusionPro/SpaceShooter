@@ -331,7 +331,7 @@ class ParticleManager {
   draw(ctx) {
     this.dustParticles.draw(ctx);
     this.trailParticles.draw(ctx);
-    this.bloodParticles.draw(ctx);
+    this.debrisParticles.draw(ctx);
     this.speedEnergyParticles.draw(ctx);
     this.multishotParticles.draw(ctx);
     this.healParticles.draw(ctx);
@@ -350,7 +350,7 @@ class ParticleManager {
     this.dustParticles.clear();
     this.trailParticles.clear();
     this.sparkleParticles.clear();
-    this.bloodParticles.clear();
+    this.debrisParticles.clear();
     this.speedEnergyParticles.clear();
     this.multishotParticles.clear();
     this.healParticles.clear();
