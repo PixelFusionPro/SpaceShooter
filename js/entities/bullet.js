@@ -18,7 +18,7 @@ class Bullet {
     this.color = '#00ffff'; // Default cyan laser
     this.trailColor = '#0088ff';
     this.pierceCount = 0; // How many zombies it can pierce
-    this.piercedZombies = []; // Track pierced zombies
+    this.piercedEnemies = []; // Track pierced enemies
     this.explosiveRadius = 0; // AOE radius
     this.effectType = null; // Special effect type
     this.effectValue = 0; // Effect strength
@@ -32,7 +32,7 @@ class Bullet {
     this.dx = Math.cos(angle) * CONFIG.BULLET.SPEED;
     this.dy = Math.sin(angle) * CONFIG.BULLET.SPEED;
     this.active = true;
-    this.piercedZombies = []; // Reset pierced zombies
+    this.piercedEnemies = []; // Reset pierced enemies
 
     // Apply ammo properties
     if (ammoType) {
