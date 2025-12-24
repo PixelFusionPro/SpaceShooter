@@ -76,7 +76,7 @@ class FortressStructure {
     
     // Shoot at target
     const angle = Math.atan2(dy, dx);
-    const bullet = this.bulletPool.acquire();
+    const bullet = this.bulletPool.get();
     
     if (bullet) {
       bullet.init(
@@ -332,7 +332,7 @@ class FortressStructure {
 
     // Opening percentage based on health (gates open when damaged)
     if (healthPercent < 0.7) {
-      const openAmount = (0.7 - healthPercent) / 0.7;
+      const openAmount = Math.max(0, Math.min(1, (0.7 - healthPercent) / 0.7));
       ctx.clearRect(
         this.x + 3,
         this.y + this.height * (1 - openAmount),

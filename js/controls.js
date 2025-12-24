@@ -9,55 +9,75 @@ class Controls {
     this.isPaused = false;
     this.onPauseToggle = onPauseToggle;
 
+    // Store handler references for cleanup
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleKeyUp = this.handleKeyUp.bind(this);
+    this.handleTouchStart = this.handleTouchStart.bind(this);
+    this.handleTouchEnd = this.handleTouchEnd.bind(this);
+
     this.setupKeyboard();
     this.setupTouch();
   }
 
-  setupKeyboard() {
-    document.addEventListener('keydown', (e) => {
-      this.keys[e.key] = true;
+  handleKeyDown(e) {
+    this.keys[e.key] = true;
 
-      // Pause toggle
-      if (e.key === 'p' || e.key === 'P') {
-        this.togglePause();
+    // Pause toggle
+    if (e.key === 'p' || e.key === 'P') {
+      this.togglePause();
+    }
+  }
+
+  handleKeyUp(e) {
+    this.keys[e.key] = false;
+  }
+
+  handleTouchStart(e) {
+    const t = e.touches[0];
+    this.touchStartX = t.clientX;
+    this.touchStartY = t.clientY;
+  }
+
+  handleTouchEnd(e) {
+    const dx = e.changedTouches[0].clientX - this.touchStartX;
+    const dy = e.changedTouches[0].clientY - this.touchStartY;
+
+    // Simulate key press based on swipe
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) {
+        this.keys['d'] = true;
+        setTimeout(() => this.keys['d'] = false, 300);
+      } else {
+        this.keys['a'] = true;
+        setTimeout(() => this.keys['a'] = false, 300);
       }
-    });
+    } else {
+      if (dy > 0) {
+        this.keys['s'] = true;
+        setTimeout(() => this.keys['s'] = false, 300);
+      } else {
+        this.keys['w'] = true;
+        setTimeout(() => this.keys['w'] = false, 300);
+      }
+    }
+  }
 
-    document.addEventListener('keyup', (e) => {
-      this.keys[e.key] = false;
-    });
+  setupKeyboard() {
+    document.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('keyup', this.handleKeyUp);
   }
 
   setupTouch() {
-    this.canvas.addEventListener('touchstart', (e) => {
-      const t = e.touches[0];
-      this.touchStartX = t.clientX;
-      this.touchStartY = t.clientY;
-    });
+    this.canvas.addEventListener('touchstart', this.handleTouchStart);
+    this.canvas.addEventListener('touchend', this.handleTouchEnd);
+  }
 
-    this.canvas.addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - this.touchStartX;
-      const dy = e.changedTouches[0].clientY - this.touchStartY;
-
-      // Simulate key press based on swipe
-      if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx > 0) {
-          this.keys['d'] = true;
-          setTimeout(() => this.keys['d'] = false, 300);
-        } else {
-          this.keys['a'] = true;
-          setTimeout(() => this.keys['a'] = false, 300);
-        }
-      } else {
-        if (dy > 0) {
-          this.keys['s'] = true;
-          setTimeout(() => this.keys['s'] = false, 300);
-        } else {
-          this.keys['w'] = true;
-          setTimeout(() => this.keys['w'] = false, 300);
-        }
-      }
-    });
+  // Cleanup method to remove event listeners
+  destroy() {
+    document.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('keyup', this.handleKeyUp);
+    this.canvas.removeEventListener('touchstart', this.handleTouchStart);
+    this.canvas.removeEventListener('touchend', this.handleTouchEnd);
   }
 
   updatePlayer(player) {

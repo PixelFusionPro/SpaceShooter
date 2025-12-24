@@ -167,6 +167,19 @@ class ZombieGame {
   }
 
   handlePauseToggle(isPaused) {
+    // Handle pause screen overlay visibility
+    if (typeof screenManager !== 'undefined' && screenManager) {
+      if (isPaused) {
+        // Just paused - show pause screen
+        updatePauseStats();
+        screenManager.showOverlay('pauseScreen');
+      } else {
+        // Just unpaused - hide pause screen
+        screenManager.hideOverlay('pauseScreen');
+      }
+    }
+
+    // Restart game loop when unpausing
     if (!isPaused && !this.gameOver) {
       requestAnimationFrame(() => this.loop());
     }
@@ -1269,6 +1282,10 @@ function pauseToMainMenu() {
   if (pauseButton) {
     pauseButton.classList.remove('show');
   }
+  // Clean up event listeners before destroying game instance
+  if (Game && Game.controls && Game.controls.destroy) {
+    Game.controls.destroy();
+  }
   Game = null; // Clean up game instance
 }
 
@@ -1280,6 +1297,10 @@ function returnToMainMenu() {
   const pauseButton = document.querySelector('.pause-button');
   if (pauseButton) {
     pauseButton.classList.remove('show');
+  }
+  // Clean up event listeners before destroying game instance
+  if (Game && Game.controls && Game.controls.destroy) {
+    Game.controls.destroy();
   }
   Game = null; // Clean up game instance
   if (typeof updateMenuCoins === 'function') {

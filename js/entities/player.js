@@ -227,6 +227,38 @@ class Player {
     }
   }
 
+  drawPowerupGlow(ctx, powerupManager) {
+    // Draw powerup glow auras around player
+    if (!powerupManager) return;
+
+    const now = Date.now();
+    let glowColor = null;
+    let pulseSpeed = 200;
+
+    // Speed powerup - orange glow
+    if (powerupManager.isSpeedActive && powerupManager.isSpeedActive()) {
+      glowColor = 'rgba(255,165,0,0.3)';
+      pulseSpeed = 150; // Faster pulse for speed
+    }
+    // Multishot powerup - yellow glow
+    else if (powerupManager.isMultishotActive && powerupManager.isMultishotActive()) {
+      glowColor = 'rgba(255,255,0,0.3)';
+      pulseSpeed = 200;
+    }
+
+    // Draw glow if active
+    if (glowColor) {
+      const pulse = Math.sin(now / pulseSpeed) * 0.3 + 0.7;
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y + this.idleOffset, this.size * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   drawMultikillTexts(ctx) {
     // Draw floating multikill indicators
     for (let i = 0; i < this.multikillTexts.length; i++) {
@@ -302,6 +334,9 @@ class Player {
 
     // Draw speed lines (when sprinting)
     this.drawSpeedLines(ctx, powerupManager);
+
+    // Draw powerup glow (behind player)
+    this.drawPowerupGlow(ctx, powerupManager);
 
     // Draw combo glow (behind player)
     this.drawComboGlow(ctx);
